@@ -14,10 +14,5 @@ import userRouter from './routes/user.routes.js';
 app.use('/api/users', userRouter)
 // http://localhost:8000/api/users
 
-app.get("/", (req, res) => {
-  res.send("CProtocol Backend is Running 🚀");
-});
-
-
 
 export {app};

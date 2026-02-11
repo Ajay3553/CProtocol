@@ -102,3 +102,113 @@ export const welcomeEmailTemplete = (name) => `
 </body>
 </html>
 `;
+
+export const Login_Alert_Email_Template = (name, device, location, time) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>New Login Detected</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #f4f6f8;
+  }
+  .container {
+    max-width: 600px;
+    margin: 30px auto;
+    background: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e0e0e0;
+  }
+  .header {
+    background-color: #1e293b;
+    color: white;
+    text-align: center;
+    padding: 20px;
+    font-size: 22px;
+    font-weight: bold;
+  }
+  .content {
+    padding: 25px;
+    color: #333;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .details {
+    background: #f1f5f9;
+    border-left: 4px solid #2563eb;
+    padding: 12px 15px;
+    margin: 20px 0;
+    border-radius: 4px;
+  }
+  .details p {
+    margin: 6px 0;
+    font-size: 14px;
+  }
+  .warning {
+    color: #b91c1c;
+    font-weight: bold;
+    margin-top: 15px;
+  }
+  .button {
+    display: inline-block;
+    margin: 20px 0;
+    padding: 12px 22px;
+    background-color: #2563eb;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  .footer {
+    background-color: #f4f6f8;
+    text-align: center;
+    padding: 15px;
+    font-size: 12px;
+    color: #777;
+    border-top: 1px solid #e0e0e0;
+  }
+  @media (max-width: 600px) {
+    .content {
+      padding: 18px;
+    }
+    .header {
+      font-size: 18px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">New Login Detected</div>
+    <div class="content">
+      <p>Hello ${name || "User"},</p>
+      <p>We detected a new login to your account. If this was you, you can safely ignore this message.</p>
+
+      <div class="details">
+        <p><strong>Device:</strong> ${device || "Unknown device"}</p>
+        <p><strong>Location:</strong> ${location || "Unknown location"}</p>
+        <p><strong>Time:</strong> ${time || new Date().toLocaleString()}</p>
+      </div>
+
+      <p class="warning">If this wasn’t you, please secure your account immediately.</p>
+
+      <a href="#" class="button">Review Account Activity</a>
+
+      <p>For security reasons, we recommend changing your password if you don’t recognize this login.</p>
+    </div>
+    <div class="footer">
+      &copy; ${new Date().getFullYear()} CProtocol Security System. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
+`;
+

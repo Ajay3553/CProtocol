@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { verificationEmailTemplete, welcomeEmailTemplete } from '../templete/email.templete.js';
+import { verificationEmailTemplete, welcomeEmailTemplete, Login_Alert_Email_Template } from '../templete/email.templete.js';
 
 const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
@@ -34,7 +34,26 @@ const sendWelcomeEmail = asyncHandler( async(email, name) => {
     console.log("Welcome Email Send Successfully")
 });
 
+const sendLoginEmailWarning = asyncHandler(async (email, name, device, location, time) => {
+    await transporter.sendMail({
+        from: `"CProtocol Security" <${process.env.EMAIL_SENDING_ID}>`,
+        to: email,
+        subject: "New Login Detected on Your Account",
+        text: `Hello ${name}, a new login was detected on your account.`,
+        html: Login_Alert_Email_Template(
+            name,
+            device,
+            location,
+            time
+        )
+    });
+
+    console.log("Login alert email sent to:", email);
+});
+
+
 export{
     sendVerificationEmail,
-    sendWelcomeEmail
+    sendWelcomeEmail,
+    sendLoginEmailWarning
 }
