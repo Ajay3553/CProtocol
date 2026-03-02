@@ -137,18 +137,24 @@ const loginUser = asyncHandler(async (req, res) => {
     const isPasswordValid = await user.isPasswordCorrect(password);
     if (!isPasswordValid) throw new apiError(401, "Invalid credentials");
 
-    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+    // const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.verificationToken = verificationToken;
-    user.verificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
-    user.isVerified = false;
-    await user.save();
+    // user.verificationToken = verificationToken;
+    // user.verificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    // user.isVerified = false;
 
-    await sendVerificationEmail(user.email, verificationToken);
+    // await sendVerificationEmail(user.email, verificationToken);
 
-    return res.status(200).json(
-        new apiResponse(200, null, "OTP sent to email. Please verify to complete login.")
-    );
+    // return res.status(200).json(
+    //     new apiResponse(200, null, "OTP sent to email. Please verify to complete login.")
+    // );
+
+    /* Using it Just For Testing */
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+    return res
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(new apiResponse(200, { accessToken, refreshToken }, "Login verified successfully"));
 });
 
 
@@ -179,10 +185,48 @@ const logoutUser = asyncHandler(async(req, res) => {
     )
 });
 
+const changeCurrentPassword  = asyncHandler(async (req, res) =>{
+    const {oldPassword, newPassword, confirmPassword} = req.body;
+    if(newPassword !== confirmPassword) throw new apiError(400, "New Password and Confirm Password must be same");
+
+    const user = await User.findById(req.user?._id);
+    const isCorrectPassword = await user.isPasswordCorrect(oldPassword);
+    if(!isCorrectPassword) throw new apiError(401, "Entered Current Password is Wrong!");
+
+    user.password = newPassword;
+    await user.save({validateBeforeSave: false});
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            {},
+            "Password Change Successfully"
+        )
+    )
+});
+
+const getCurrentUser = asyncHandler(async(req, res) => {
+    const user = await User.findById(req.user?._id).select(
+        "-password -refreshToken -verificationToken -verificationTokenExpiry"
+    );
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            user,
+            "Current User Fetched Successfully"
+        )
+    )
+});
+
 export {
     registerUser,
     verifyEmail,
     loginUser,
     verifyLoginEmail,
-    logoutUser
+    logoutUser,
+    changeCurrentPassword,
+    getCurrentUser
 }
