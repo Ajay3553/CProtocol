@@ -45,7 +45,7 @@ const getChannelMessages = asyncHandler(async (req, res) => {
     if(!channel) throw new apiError(404, "Channel not Found");
 
     const participant = channel.participants.find((p) => {
-        p.user.toString() === req.user._id.toString()
+        return p.user.toString() === req.user._id.toString();
     });
     if(!participant) throw new apiError(403, "Access denied");
 
@@ -94,10 +94,11 @@ const deleteMessage = asyncHandler(async (req, res) => {
     if(message.sender.toString() !== req.user._id.toString()) throw new apiError(403, "You can only deltet your own Message");
 
     message.isDeleted = true;
+    message.expiresAt = new Date(Date.now() + 24*60*60*1000);
     await message.save();
 
     return res.status(200).json(
-        new apiResponse(200, {}, "Message Deleteed Successfully")
+        new apiResponse(200, {}, "Message Deleteed Successfully. It will be Permanently Removed in 24 hours")
     );
 });
 
