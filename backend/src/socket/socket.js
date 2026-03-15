@@ -50,7 +50,8 @@ const initSocket = (server) => {
         // Send Message
         socket.on("send_message", async(data) => {
             try{
-                const {channelId, senderId, content} = data;
+                const {channelId, content} = data;
+                const senderId = socket.user._id;
                 const channel = await Channel.findById(channelId);
                 if(!channel) return socket.emit("error", "Channel not found");
                 const message = await Message.create({
