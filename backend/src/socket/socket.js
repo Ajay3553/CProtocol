@@ -1,6 +1,7 @@
 import {Server} from "socket.io";
 import { Message } from "../models/message.models.js";
 import { Channel } from "../models/channel.model.js";
+import jwt from "jsonwebtoken";
 
 const userSocketMap = new Map();
 
@@ -11,13 +12,33 @@ const initSocket = (server) => {
             origin: "*"
         }
     });
+
+    // Socket Authentication
+    io.use((socket, next) => {
+        try{
+            const token = socket.handshake.auth?.token;
+            if(!token) return next(new Error("Authentication Error in Socekt : Token Missing"));
+
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+            socket.user = decoded;
+
+            next();
+        }
+        catch(e){
+            return next(new Error("Authentication Error in Socket : Invalid Token"));
+        }
+    })
+
+
     io.on("connection", (socket) => {
         console.log("User connecterd: ", socket.id);
 
         // Register User
-        socket.on("register_user", (userId) => {
+        socket.on("register_user", () => {
+            const userId = socket.user._id;
             userSocketMap.set(userId, socket.id);
             console.log(`User ${userId} registered with Socket ${socket.id}`);
+            io.emit("user_online", userId);
         })
 
         // Join Channel
@@ -51,10 +72,26 @@ const initSocket = (server) => {
             }
         });
 
+        // typing Start
+        socket.on("typing_start", ({channelId}) => {
+            socket.to(channelId).emit("user_typing", {
+                userId : socket.user._id
+            });
+        });
+
+        // typing End
+        socket.on("typing_stop", ({channelId}) => {
+            socket.to(channelId).emit("user_stop_typing", {
+                userId : socket.user._id
+            });
+        });
+
+
         socket.on("disconnect", () => {
             for(const [userId, socketId] of userSocketMap.entries()){
                 if(socketId === socket.id){
                     userSocketMap.delete(userId);
+                    io.emit("user_offline", userId);
                     break;
                 }
             }
