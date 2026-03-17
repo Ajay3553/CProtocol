@@ -102,9 +102,30 @@ const deleteMessage = asyncHandler(async (req, res) => {
     );
 });
 
+// TTL
+const updateMessageTTL = asyncHandler(async (req, res) =>{
+    const {messageId} = req.params;
+    const {ttlMinutes} = req.body;
+
+    const message = await Message.findById(messageId);
+    if(!message) throw new apiError(404, "Message not Found");
+
+    //only sender can update TTL
+    if(message.sender.toString() !== req.user._id.toString()) throw new apiError(403, "Not Authorized");
+    if(ttlMinutes === null || ttlMinutes === 0) message.expiresAt = undefined;
+    else message.expiresAt = new Date(Date.now() + ttlMinutes*60*1000);
+
+    await message.save();
+
+    return res.status(200).json(
+        new apiResponse(200, message, "TTL updated Successfully")
+    );
+})
+
 export {
     sendMessage,
     getChannelMessages,
     editMessage,
-    deleteMessage
+    deleteMessage,
+    updateMessageTTL
 };
