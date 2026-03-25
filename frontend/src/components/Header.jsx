@@ -24,7 +24,7 @@ function Header() {
 
     return (
         <>
-            <header className='pt-2 pb-2 sm:h-14 bg-gradient-to-r from-purple-400 to-pink-400'>
+            <header className='pt-2 pb-2 sm:h-14 bg-gradient-to-r from-purple-300 to-pink-300'>
                 <Container>
                     <nav className='flex items-center justify-between w-full -mt-1'>
                         <div className='w-[90px] h-[50px] items-center hidden sm:flex -ml-5'>
