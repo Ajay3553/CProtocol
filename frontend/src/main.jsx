@@ -6,6 +6,9 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import Home from './pages/Home.jsx'
 import About from './pages/About.jsx'
 import ContactUs from './pages/ContactUs.jsx'
+import Channels from './pages/Channels.jsx'
+import Signup from './pages/userPages/Signup.jsx'
+import Login from './pages/userPages/Login.jsx'
 
 const router = createBrowserRouter([
   {
@@ -28,6 +31,24 @@ const router = createBrowserRouter([
         path: '/contact-us',
         element: (
           <ContactUs />
+        )
+      },
+      {
+        path: '/channels',
+        element: (
+          <Channels />
+        )
+      },
+      {
+        path: '/register',
+        element: (
+          <Signup />
+        )
+      },
+      {
+        path: '/login',
+        element: (
+          <Login />
         )
       }
     ]
