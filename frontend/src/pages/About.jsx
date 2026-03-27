@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useSelector } from "react-redux";
 
 // Reusable animation wrappers
 const FadeInWhenVisible = ({ children, delay = 0, direction = 'up', className = '' }) => {
@@ -57,6 +58,8 @@ const StaggerItem = ({ children, className = '' }) => (
 )
 
 function About() {
+  const { status: isLoggedIn } = useSelector((state) => state.auth)
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-100 via-purple-100 to-white text-gray-800 overflow-x-hidden">
 
@@ -163,7 +166,7 @@ function About() {
             {
               category: 'Frontend',
               icon: '🎨',
-              items: ['React + Vite', 'Tailwind CSS', 'Zustand', 'Socket.IO Client'],
+              items: ['React + Vite', 'Tailwind CSS', 'Redux Toolkit', 'Socket.IO Client'],
             },
             {
               category: 'Backend',
@@ -327,7 +330,6 @@ function About() {
                 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               >
-                {/* Phase badge */}
                 <motion.p
                   className="text-xs font-semibold text-purple-500 uppercase tracking-wider mb-1"
                   initial={{ opacity: 0, scale: 0.8 }}
@@ -338,7 +340,6 @@ function About() {
                   {phase.phase}
                 </motion.p>
 
-                {/* Status */}
                 <div className="flex items-center justify-center gap-1.5 mb-2">
                   {phase.status.includes('Upcoming') && (
                     <motion.span
@@ -407,12 +408,12 @@ function About() {
       <section className="text-center py-12 px-6">
         <FadeInWhenVisible>
           <h2 className="text-2xl font-semibold mb-4 text-purple-900">
-            Want to try CProtocol?
+            {isLoggedIn ? 'Jump into your conversations' : 'Want to try CProtocol?'}
           </h2>
         </FadeInWhenVisible>
 
         <FadeInWhenVisible delay={0.15}>
-          <Link to="/register">
+          <Link to={isLoggedIn ? '/channels' : '/register'}>
             <motion.span
               className="inline-block bg-purple-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg"
               whileHover={{
@@ -422,7 +423,7 @@ function About() {
               whileTap={{ scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 300 }}
             >
-              Get Started →
+              {isLoggedIn ? 'Open Channels 💬' : 'Get Started →'}
             </motion.span>
           </Link>
         </FadeInWhenVisible>

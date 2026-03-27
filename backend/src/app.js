@@ -4,6 +4,15 @@ import cookieParser from 'cookie-parser';
 
 const app = express();
 
+const USER_URL = process.env.USER_URL || 'http://localhost:5173';
+
+app.use(cors(
+    {
+        origin: USER_URL,
+        credentials: true
+    }
+));
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static("public"));

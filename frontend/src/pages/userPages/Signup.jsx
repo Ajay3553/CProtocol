@@ -6,6 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import logo from '../../assets/logo.png'
 import { IoEyeOutline, IoEyeOffOutline } from 'react-icons/io5'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const REGISTER_ENDPOINT = `${API_BASE_URL}/api/users/register`
+
 // Animation helpers
 const FadeInWhenVisible = ({ children, delay = 0, direction = 'up', className = '' }) => {
     const directions = {
@@ -201,19 +204,19 @@ function Signup() {
                 {/* Avatar Upload */}
                 <StaggerItem>
                     <div className="mb-5">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Profile Image *
-                    </label>
-                    <div className="flex items-center gap-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Profile Image <span className="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <div className="flex items-center gap-4">
                         {/* Preview Circle */}
                         <motion.div
-                        className="w-16 h-16 rounded-full border-2 border-dashed border-purple-300 flex items-center justify-center overflow-hidden bg-purple-50 flex-shrink-0"
-                        whileHover={{ borderColor: 'rgb(147, 51, 234)', scale: 1.05 }}
-                        transition={{ duration: 0.2 }}
+                            className="w-16 h-16 rounded-full border-2 border-dashed border-purple-300 flex items-center justify-center overflow-hidden bg-purple-50 flex-shrink-0"
+                            whileHover={{ borderColor: 'rgb(147, 51, 234)', scale: 1.05 }}
+                            transition={{ duration: 0.2 }}
                         >
-                        <AnimatePresence mode="wait">
+                            <AnimatePresence mode="wait">
                             {avatarPreview ? (
-                            <motion.img
+                                <motion.img
                                 key="preview"
                                 src={avatarPreview}
                                 alt="Avatar preview"
@@ -222,43 +225,32 @@ function Signup() {
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.5 }}
                                 transition={{ duration: 0.3 }}
-                            />
+                                />
                             ) : (
-                            <motion.span
+                                <motion.span
                                 key="placeholder"
                                 className="text-2xl"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                            >
+                                >
                                 👤
-                            </motion.span>
+                                </motion.span>
                             )}
-                        </AnimatePresence>
+                            </AnimatePresence>
                         </motion.div>
 
                         <div className="flex-1">
-                        <input
+                            <input
                             id="avatar"
                             type="file"
                             accept="image/*"
                             className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 file:cursor-pointer file:transition-colors cursor-pointer"
                             {...register('avatar', {
-                            required: 'Profile image is required',
-                            onChange: handleAvatarChange
+                                onChange: handleAvatarChange
                             })}
-                        />
+                            />
                         </div>
-                    </div>
-                    {errors.avatar && (
-                        <motion.p
-                        className="text-red-500 text-sm mt-1"
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        >
-                        {errors.avatar.message}
-                        </motion.p>
-                    )}
+                        </div>
                     </div>
                 </StaggerItem>
 

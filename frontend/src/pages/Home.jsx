@@ -1,6 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useSelector } from 'react-redux'
 
 // Reusable animation wrapper
 const FadeInWhenVisible = ({ children, delay = 0, direction = 'up', className = '' }) => {
@@ -59,6 +60,8 @@ const StaggerItem = ({ children, className = '' }) => (
 )
 
 function Home() {
+  const { status: isLoggedIn, userData: user } = useSelector((state) => state.auth)
+
   return (
     <div className='min-h-screen bg-gradient-to-b from-pink-100 via-purple-100 to-white text-gray-800 overflow-x-hidden'>
 
@@ -73,75 +76,137 @@ function Home() {
           Communication Protocol
         </motion.p>
 
+        {/* hero title */}
         <motion.h1
           className='text-4xl md:text-6xl font-bold mb-6 leading-tight'
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.15 }}
         >
-          Messaging,{' '}
-          <motion.span
-            className='text-purple-600 inline-block'
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.4, type: 'spring', stiffness: 200 }}
-          >
-            Redefined
-          </motion.span>{' '}
-          <motion.span
-            className='inline-block'
-            initial={{ opacity: 0, rotate: -30 }}
-            animate={{ opacity: 1, rotate: 0 }}
-            transition={{ duration: 0.5, delay: 0.6, type: 'spring' }}
-          >
-            🚀
-          </motion.span>
+          {isLoggedIn ? (
+            <>
+              Welcome back,{' '}
+              <motion.span
+                className='text-purple-600 inline-block'
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.4, type: 'spring', stiffness: 200 }}
+              >
+                {user?.fullName?.split(' ')[0] || user?.username || 'User'}
+              </motion.span>{' '}
+              <motion.span
+                className='inline-block'
+                initial={{ opacity: 0, rotate: -30 }}
+                animate={{ opacity: 1, rotate: 0 }}
+                transition={{ duration: 0.5, delay: 0.6, type: 'spring' }}
+              >
+                👋
+              </motion.span>
+            </>
+          ) : (
+            <>
+              Messaging,{' '}
+              <motion.span
+                className='text-purple-600 inline-block'
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.4, type: 'spring', stiffness: 200 }}
+              >
+                Redefined
+              </motion.span>{' '}
+              <motion.span
+                className='inline-block'
+                initial={{ opacity: 0, rotate: -30 }}
+                animate={{ opacity: 1, rotate: 0 }}
+                transition={{ duration: 0.5, delay: 0.6, type: 'spring' }}
+              >
+                🚀
+              </motion.span>
+            </>
+          )}
         </motion.h1>
 
+        {/* Description */}
         <motion.p
           className='text-lg md:text-xl text-gray-600 max-w-3xl mx-auto mb-10'
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
         >
-          A secure, real-time messaging platform built for teams and individuals.
-          Channel-based chat, self-destructing messages, and blazing-fast delivery
-          — all in one place.
+          {isLoggedIn
+            ? 'Jump back into your channels, continue conversations, and collaborate with your team in real-time.'
+            : 'A secure, real-time messaging platform built for teams and individuals. Channel-based chat, self-destructing messages, and blazing-fast delivery — all in one place.'
+          }
         </motion.p>
 
+        {/* CTA */}
         <motion.div
           className='flex flex-col sm:flex-row justify-center gap-4'
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >
-          <Link to='/register'>
-            <motion.span
-              className='inline-block bg-purple-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg w-full sm:w-auto'
-              whileHover={{
-                scale: 1.05,
-                boxShadow: '0 10px 30px rgba(147, 51, 234, 0.4)',
-              }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: 'spring', stiffness: 300 }}
-            >
-              Get Started — It's Free
-            </motion.span>
-          </Link>
-          <Link to='/login'>
-            <motion.span
-              className='inline-block border-2 border-purple-600 text-purple-600 px-8 py-3 rounded-lg font-semibold w-full sm:w-auto'
-              whileHover={{
-                scale: 1.05,
-                backgroundColor: 'rgb(147, 51, 234)',
-                color: '#ffffff',
-              }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: 'spring', stiffness: 300 }}
-            >
-              Login
-            </motion.span>
-          </Link>
+          {isLoggedIn ? (
+            <>
+              <Link to='/channels'>
+                <motion.span
+                  className='inline-block bg-purple-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg w-full sm:w-auto'
+                  whileHover={{
+                    scale: 1.05,
+                    boxShadow: '0 10px 30px rgba(147, 51, 234, 0.4)',
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  Open Channels 💬
+                </motion.span>
+              </Link>
+              <Link to='/about'>
+                <motion.span
+                  className='inline-block border-2 border-purple-600 text-purple-600 px-8 py-3 rounded-lg font-semibold w-full sm:w-auto'
+                  whileHover={{
+                    scale: 1.05,
+                    backgroundColor: 'rgb(147, 51, 234)',
+                    color: '#ffffff',
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  Learn More
+                </motion.span>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link to='/register'>
+                <motion.span
+                  className='inline-block bg-purple-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg w-full sm:w-auto'
+                  whileHover={{
+                    scale: 1.05,
+                    boxShadow: '0 10px 30px rgba(147, 51, 234, 0.4)',
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  Get Started — It's Free
+                </motion.span>
+              </Link>
+              <Link to='/login'>
+                <motion.span
+                  className='inline-block border-2 border-purple-600 text-purple-600 px-8 py-3 rounded-lg font-semibold w-full sm:w-auto'
+                  whileHover={{
+                    scale: 1.05,
+                    backgroundColor: 'rgb(147, 51, 234)',
+                    color: '#ffffff',
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  Login
+                </motion.span>
+              </Link>
+            </>
+          )}
         </motion.div>
       </section>
 
@@ -261,7 +326,6 @@ function Home() {
                 {item.step}
               </motion.div>
 
-              {/* Connector line */}
               {index < 2 && (
                 <motion.div
                   className='hidden sm:block absolute top-7 left-[60%] w-[80%] h-0.5 bg-purple-200'
@@ -284,7 +348,7 @@ function Home() {
         </StaggerContainer>
       </section>
 
-      {/* STATS / HIGHLIGHTS */}
+      {/* STATS */}
       <section className='max-w-6xl mx-auto px-6 py-12'>
         <FadeInWhenVisible>
           <div className='bg-white rounded-2xl shadow-lg p-10'>
@@ -327,7 +391,7 @@ function Home() {
         </FadeInWhenVisible>
       </section>
 
-      {/* FUTURE ENCRYPTION BANNER */}
+      {/* ENCRYPTION BANNER */}
       <section className='max-w-6xl mx-auto px-6 py-12'>
         <FadeInWhenVisible direction='left'>
           <motion.div
@@ -372,29 +436,47 @@ function Home() {
         </FadeInWhenVisible>
       </section>
 
-      {/* FINAL CTA */}
+      {/* Final CTA */}
       <section className='text-center py-16 px-6'>
         <FadeInWhenVisible>
           <h2 className='text-3xl md:text-4xl font-bold mb-4'>
-            Ready to{' '}
-            <motion.span
-              className='text-purple-600 inline-block'
-              whileHover={{ scale: 1.05 }}
-            >
-              communicate securely
-            </motion.span>
-            ?
+            {isLoggedIn ? (
+              <>
+                Your channels are{' '}
+                <motion.span
+                  className='text-purple-600 inline-block'
+                  whileHover={{ scale: 1.05 }}
+                >
+                  waiting for you
+                </motion.span>
+                {' '}💬
+              </>
+            ) : (
+              <>
+                Ready to{' '}
+                <motion.span
+                  className='text-purple-600 inline-block'
+                  whileHover={{ scale: 1.05 }}
+                >
+                  communicate securely
+                </motion.span>
+                ?
+              </>
+            )}
           </h2>
         </FadeInWhenVisible>
 
         <FadeInWhenVisible delay={0.15}>
           <p className='text-gray-600 max-w-xl mx-auto mb-8'>
-            Join CProtocol today and experience real-time messaging the way it should be.
+            {isLoggedIn
+              ? 'Continue your conversations or explore new channels.'
+              : 'Join CProtocol today and experience real-time messaging the way it should be.'
+            }
           </p>
         </FadeInWhenVisible>
 
         <FadeInWhenVisible delay={0.3}>
-          <Link to='/register'>
+          <Link to={isLoggedIn ? '/channels' : '/register'}>
             <motion.span
               className='inline-block bg-purple-600 text-white px-10 py-4 rounded-lg text-lg font-semibold shadow-lg'
               whileHover={{
@@ -404,7 +486,7 @@ function Home() {
               whileTap={{ scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 300 }}
             >
-              Get Started Now
+              {isLoggedIn ? 'Go to Channels' : 'Get Started Now'}
             </motion.span>
           </Link>
         </FadeInWhenVisible>
