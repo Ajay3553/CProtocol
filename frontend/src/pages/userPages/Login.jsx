@@ -72,25 +72,18 @@ function Login() {
                 credentials: 'include'
             })
 
-            let result
-            try {
-                result = await response.json()
-            } catch (parseError) {
-                throw new Error('Server error. Please try again later.')
-            }
+            const result = await response.json()
 
             if (!response.ok || !result?.success) {
                 throw new Error(result?.message || 'Invalid username or password')
             }
 
-            await dispatch(fetchCurrentUser()).unwrap()
-
-            toast.success(result.message || 'Welcome back!')
+            toast.success(result.message || 'OTP sent to your email!')
             reset()
-
-            setTimeout(() => {
-                navigate('/channels', { replace: true })
-            }, 100)
+            navigate('/verify-email', {
+                state: { email: data.username, type: 'login' },
+                replace: true
+            })
 
         } catch (e) {
             console.error('Login error:', e)
@@ -219,20 +212,6 @@ function Login() {
                                             {errors.password.message}
                                         </motion.p>
                                     )}
-                                </div>
-                            </StaggerItem>
-
-                            <StaggerItem>
-                                <div className="mb-6 flex items-center gap-2">
-                                    <input
-                                        id="rememberMe"
-                                        type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                                        {...register('rememberMe')}
-                                    />
-                                    <label htmlFor="rememberMe" className="text-sm text-gray-600 cursor-pointer select-none">
-                                        Remember me for 30 days
-                                    </label>
                                 </div>
                             </StaggerItem>
 

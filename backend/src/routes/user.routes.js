@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { changeCurrentPassword, getCurrentUser, loginUser, logoutUser, registerUser, verifyEmail, verifyLoginEmail } from '../controllers/user.controller.js';
+import { changeCurrentPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendVerifyEmail, verifyEmail, verifyLoginEmail } from '../controllers/user.controller.js';
 import { upload } from '../middleware/multer.middleware.js';
 import { verifyJWT } from '../middleware/auth.middleware.js';
 
@@ -20,6 +20,7 @@ router.route('/register').post(
 router.route('/verify-email').post(verifyEmail);
 router.route('/login').post(loginUser);
 router.route('/verify-login-email').post(verifyLoginEmail);
+router.route('/resend-verify-email').post(resendVerifyEmail);
 
 // protected
 router.route('/logout').post(verifyJWT, logoutUser);

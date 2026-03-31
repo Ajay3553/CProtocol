@@ -96,35 +96,39 @@ function Signup() {
 
     const onSubmit = async (data) => {
         try {
-        const formData = new FormData()
-        formData.append('fullName', data.fullName)
-        formData.append('email', data.email)
-        formData.append('username', data.username)
-        formData.append('password', data.password)
+            const formData = new FormData()
+            formData.append('fullName', data.fullName)
+            formData.append('email', data.email)
+            formData.append('username', data.username)
+            formData.append('password', data.password)
 
-        if (data.avatar && data.avatar[0]) {
-            formData.append('avatar', data.avatar[0])
-        }
+            if (data.avatar && data.avatar[0]) {
+                formData.append('avatar', data.avatar[0])
+            }
 
-        const response = await fetch(REGISTER_ENDPOINT, {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-        })
+            const response = await fetch(REGISTER_ENDPOINT, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            })
 
-        const result = await response.json()
+            const result = await response.json()
 
-        if (!response.ok || !result?.success) {
-            throw new Error(result?.message || 'Signup failed')
-        }
+            if (!response.ok || !result?.success) {
+                throw new Error(result?.message || 'Signup failed')
+            }
 
-        toast.success(result.message || 'Account created successfully!')
-        reset()
-        setAvatarPreview(null)
-        navigate('/login', { replace: true })
+            toast.success(result.message || 'OTP sent to your email!')
+            reset()
+            setAvatarPreview(null)
+
+            navigate('/verify-email', {
+                state: { email: data.email },
+                replace: true
+            })
         } catch (e) {
-        console.error('Signup error:', e)
-        toast.error(e.message || 'Signup failed, try again.')
+            console.error('Signup error:', e)
+            toast.error(e.message || 'Signup failed, try again.')
         }
     }
 

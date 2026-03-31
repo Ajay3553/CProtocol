@@ -11,6 +11,7 @@ import ContactUs from './pages/ContactUs.jsx'
 import Channels from './pages/Channels.jsx'
 import Signup from './pages/userPages/Signup.jsx'
 import Login from './pages/userPages/Login.jsx'
+import VerifyEmail from './pages/userPages/VerifyEmail.jsx'
 
 const router = createBrowserRouter([
   {
@@ -51,6 +52,12 @@ const router = createBrowserRouter([
         path: '/login',
         element: (
           <Login />
+        )
+      },
+      {
+        path: 'verify-email',
+        element: (
+          <VerifyEmail />
         )
       }
     ]
