@@ -164,7 +164,7 @@ const loginUser = asyncHandler(async (req, res) => {
     user.verificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
     user.isVerified = false;
 
-    user.save();
+    await user.save();
 
     await sendVerificationEmail(user.email, verificationToken);
 

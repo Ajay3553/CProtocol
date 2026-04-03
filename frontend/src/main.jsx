@@ -12,6 +12,9 @@ import Channels from './pages/Channels.jsx'
 import Signup from './pages/userPages/Signup.jsx'
 import Login from './pages/userPages/Login.jsx'
 import VerifyEmail from './pages/userPages/VerifyEmail.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
+import PublicRoute from './components/PublicRoute.jsx'
+import Dashboard from './pages/userPages/Dashboard.jsx'
 
 const router = createBrowserRouter([
   {
@@ -20,44 +23,50 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/',
-        element: (
-          <Home />
-        ),
+        element: <Home />
       },
       {
         path: '/about',
-        element: (
-          <About />
-        ),
+        element: <About />
       },
       {
         path: '/contact-us',
-        element: (
-          <ContactUs />
-        )
+        element: <ContactUs />
       },
       {
         path: '/channels',
         element: (
-          <Channels />
+          <ProtectedRoute>
+            <Channels />
+          </ProtectedRoute>
         )
       },
       {
         path: '/register',
         element: (
-          <Signup />
+          <PublicRoute>
+            <Signup />
+          </PublicRoute>
         )
       },
       {
         path: '/login',
         element: (
-          <Login />
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
         )
       },
       {
-        path: 'verify-email',
+        path: '/verify-email',
+        element: <VerifyEmail />
+      },
+      {
+        path: '/dashboard',
         element: (
-          <VerifyEmail />
+          <ProtectedRoute >
+            <Dashboard />
+          </ProtectedRoute>
         )
       }
     ]

@@ -7,39 +7,10 @@ import { IoEyeOutline, IoEyeOffOutline } from 'react-icons/io5'
 import logo from '../../assets/logo.png'
 import { useDispatch } from 'react-redux'
 import { fetchCurrentUser } from '../../store/authSlice'
+import { StaggerContainer, StaggerItem, FadeInWhenVisible } from '../../components/motion/index.jsx'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const LOGIN_ENDPOINT = `${API_BASE_URL}/api/users/login`
-
-const StaggerContainer = ({ children, className = '', staggerDelay = 0.08 }) => (
-    <motion.div
-        className={className}
-        initial="hidden"
-        animate="visible"
-        variants={{
-            hidden: {},
-            visible: { transition: { staggerChildren: staggerDelay } },
-        }}
-    >
-        {children}
-    </motion.div>
-)
-
-const StaggerItem = ({ children, className = '' }) => (
-    <motion.div
-        className={className}
-        variants={{
-            hidden: { opacity: 0, y: 20 },
-            visible: {
-                opacity: 1,
-                y: 0,
-                transition: { duration: 0.4, ease: 'easeOut' },
-            },
-        }}
-    >
-        {children}
-    </motion.div>
-)
 
 function Login() {
     const navigate = useNavigate()

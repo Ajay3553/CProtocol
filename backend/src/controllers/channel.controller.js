@@ -4,20 +4,24 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiError } from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 
+
 const createChannel = asyncHandler(async (req, res) => {
     const {name, type, participants} = req.body;
 
-    if(!participants || !participants.length === 0) throw new apiError(400, "Participants required");
-    if(type === "direct" && participants.length !== 1) throw new apiError(400, "Direct channel must contain exactly 2 users including creater");
+    if (!Array.isArray(participants)) throw new apiError(400, "Participants must be an array");  // ← CHANGED (fixed buggy validation)
+    if (type === "direct" && participants.length !== 1) throw new apiError(400, "Direct channel must contain exactly 2 users including creater");
 
-    const formatedParticipants = participants.map( userId => ({
-        user: userId,
-        channelRole : "Agent"
+    const resolvedUsers = await User.find({ username: { $in: participants } });
+    if (type === "direct" && resolvedUsers.length !== 1) throw new apiError(404, "Participant username not found");
+
+    const formatedParticipants = resolvedUsers.map(u => ({  // ← CHANGED: use resolved user docs
+        user: u._id,
+        channelRole: "Agent"
     }));
 
     formatedParticipants.push({
         user: req.user._id,
-        channelRole : "Admin"
+        channelRole: "Admin"
     });
 
     const channel = await Channel.create({
@@ -32,6 +36,7 @@ const createChannel = asyncHandler(async (req, res) => {
     );
 });
 
+
 const getUserChannels = asyncHandler(async (req, res) => {
     const channels = await Channel.find({
         "participants.user" : req.user._id
@@ -40,6 +45,7 @@ const getUserChannels = asyncHandler(async (req, res) => {
         new apiResponse(200, channels, "User Channels Fetched")
     );
 });
+
 
 const getChannelDetails = asyncHandler(async (req, res) => {
     const { channelId } = req.params;
@@ -56,12 +62,15 @@ const getChannelDetails = asyncHandler(async (req, res) => {
     );
 });
 
+
 const addParticipants = asyncHandler(async (req, res) => {
     const {channelId} = req.params;
-    const {userId} = req.body;
+    const {username} = req.body;
 
-    const user = await User.findById(userId);
+    const user = await User.findOne({ username });
     if(!user) throw new apiError(404, "User not found");
+
+    const userId = user._id;
 
     const channel = await Channel.findById(channelId);
     if(!channel) throw new apiError(404, "Channel not Found");
@@ -72,12 +81,12 @@ const addParticipants = asyncHandler(async (req, res) => {
     if(!requester || requester.channelRole !== "Admin") throw new apiError(403, "Only Admin can add participants");
 
     const alreadyMember = channel.participants.some(
-        p => p.user.toString() === userId
+        p => p.user.toString() === userId.toString()
     );
     if(alreadyMember) throw new apiError(400, "User already in channel");
 
     channel.participants.push({
-        user : userId,
+        user: userId,
         channelRole: "Agent"
     });
 
@@ -87,6 +96,7 @@ const addParticipants = asyncHandler(async (req, res) => {
         new apiResponse(200, channel, "Participant added")
     );
 });
+
 
 const removeParticipant = asyncHandler(async(req, res) => {
     const {channelId} = req.params;
@@ -102,7 +112,7 @@ const removeParticipant = asyncHandler(async(req, res) => {
 
     channel.participants = channel.participants.filter(
         p => p.user.toString() !== userId
-    )
+    );
 
     await channel.save();
 
@@ -110,6 +120,7 @@ const removeParticipant = asyncHandler(async(req, res) => {
         new apiResponse(200, channel, "Participant removed")
     );
 });
+
 
 const updateParticipantRole = asyncHandler(async(req, res) => {
     const {channelId} = req.params;
@@ -139,11 +150,12 @@ const updateParticipantRole = asyncHandler(async(req, res) => {
     );
 });
 
+
 const deleteChannel = asyncHandler(async(req, res) => {
     const {channelId} = req.params;
     const channel = await Channel.findById(channelId);
     if(!channel) throw new apiError(404, "Channel not Found");
-    
+
     const requester = channel.participants.find(
         p => p.user.toString() === req.user._id.toString()
     );
@@ -155,6 +167,7 @@ const deleteChannel = asyncHandler(async(req, res) => {
         new apiResponse(200, {}, "Channel Deleted")
     );
 });
+
 
 export {
     createChannel,

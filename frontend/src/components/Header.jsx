@@ -182,24 +182,25 @@ function Header() {
                                     animate={{ scale: 1 }}
                                     transition={{ type: 'spring', stiffness: 300 }}
                                 >
-                                    {/* ✅ NEW: Show avatar image if available, otherwise initial */}
-                                    {user?.avatar ? (
-                                        <motion.img
-                                            src={user.avatar}
-                                            alt={user.username}
-                                            className='w-8 h-8 rounded-full object-cover cursor-pointer border-2 border-purple-600'
-                                            whileHover={{ scale: 1.15 }}
-                                            whileTap={{ scale: 0.9 }}
-                                        />
-                                    ) : (
-                                        <motion.div
-                                            className='w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold cursor-pointer'
-                                            whileHover={{ scale: 1.15, rotate: 5 }}
-                                            whileTap={{ scale: 0.9 }}
-                                        >
-                                            {user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                                        </motion.div>
-                                    )}
+                                    <Link to='/dashboard'>
+                                        {user?.avatar ? (
+                                            <motion.img
+                                                src={user.avatar}
+                                                alt={user.username}
+                                                className='w-8 h-8 rounded-full object-cover cursor-pointer border-2 border-purple-600'
+                                                whileHover={{ scale: 1.15 }}
+                                                whileTap={{ scale: 0.9 }}
+                                            />
+                                        ) : (
+                                            <motion.div
+                                                className='w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold cursor-pointer'
+                                                whileHover={{ scale: 1.15, rotate: 5 }}
+                                                whileTap={{ scale: 0.9 }}
+                                            >
+                                                {user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                                            </motion.div>
+                                        )}
+                                    </Link>
                                 </motion.div>
                             ) : (
                                 <motion.div
@@ -363,34 +364,39 @@ function Header() {
                             >
                                 {isLoggedIn && user ? (
                                     <div className='space-y-3'>
-                                        <motion.div
-                                            className='flex items-center gap-3 p-3 bg-purple-50 rounded-lg'
-                                            whileHover={{ scale: 1.02 }}
+                                        <Link
+                                        to='/dashboard'
+                                        onClick={() => setIsMenuOpen(false)}
                                         >
-                                            {user?.avatar ? (
-                                                <motion.img
-                                                    src={user.avatar}
-                                                    alt={user.username}
-                                                    className='w-10 h-10 rounded-full object-cover border-2 border-purple-300'
-                                                    whileHover={{ scale: 1.1 }}
-                                                />
-                                            ) : (
-                                                <motion.div
-                                                    className='w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold'
-                                                    whileHover={{ rotate: 10 }}
-                                                >
-                                                    {user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                                                </motion.div>
-                                            )}
-                                            <div>
-                                                <p className='font-semibold text-gray-800 text-sm'>
-                                                    {user?.fullName || user?.username || 'User'}
-                                                </p>
-                                                <p className='text-xs text-gray-500'>
-                                                    @{user?.username || ''}
-                                                </p>
-                                            </div>
-                                        </motion.div>
+                                            <motion.div
+                                                className='flex items-center gap-3 p-3 bg-purple-50 rounded-lg'
+                                                whileHover={{ scale: 1.02 }}
+                                            >
+                                                {user?.avatar ? (
+                                                    <motion.img
+                                                        src={user.avatar}
+                                                        alt={user.username}
+                                                        className='w-10 h-10 rounded-full object-cover border-2 border-purple-300'
+                                                        whileHover={{ scale: 1.1 }}
+                                                    />
+                                                ) : (
+                                                    <motion.div
+                                                        className='w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold'
+                                                        whileHover={{ rotate: 10 }}
+                                                    >
+                                                        {user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                                                    </motion.div>
+                                                )}
+                                                <div>
+                                                    <p className='font-semibold text-gray-800 text-sm'>
+                                                        {user?.fullName || user?.username || 'User'}
+                                                    </p>
+                                                    <p className='text-xs text-gray-500'>
+                                                        @{user?.username || ''}
+                                                    </p>
+                                                </div>
+                                            </motion.div>
+                                        </Link>
 
                                         <Link
                                             to='/channels'

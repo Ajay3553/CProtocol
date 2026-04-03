@@ -5,61 +5,10 @@ import { toast } from 'react-toastify'
 import { motion, AnimatePresence } from 'framer-motion'
 import logo from '../../assets/logo.png'
 import { IoEyeOutline, IoEyeOffOutline } from 'react-icons/io5'
+import { StaggerContainer, StaggerItem, FadeInWhenVisible } from '../../components/motion/index.jsx'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const REGISTER_ENDPOINT = `${API_BASE_URL}/api/users/register`
-
-// Animation helpers
-const FadeInWhenVisible = ({ children, delay = 0, direction = 'up', className = '' }) => {
-    const directions = {
-        up: { y: 40, x: 0 },
-        down: { y: -40, x: 0 },
-        left: { y: 0, x: 40 },
-        right: { y: 0, x: -40 },
-    }
-
-    return (
-        <motion.div
-        className={className}
-        initial={{ opacity: 0, ...directions[direction] }}
-        whileInView={{ opacity: 1, x: 0, y: 0 }}
-        viewport={{ once: true, margin: '-50px' }}
-        transition={{ duration: 0.6, delay, ease: 'easeOut' }}
-        >
-        {children}
-        </motion.div>
-    )
-}
-
-const StaggerContainer = ({ children, className = '', staggerDelay = 0.08 }) => (
-    <motion.div
-        className={className}
-        initial="hidden"
-        animate="visible"
-        variants={{
-        hidden: {},
-        visible: { transition: { staggerChildren: staggerDelay } },
-        }}
-    >
-        {children}
-    </motion.div>
-)
-
-const StaggerItem = ({ children, className = '' }) => (
-    <motion.div
-        className={className}
-        variants={{
-        hidden: { opacity: 0, y: 20 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.4, ease: 'easeOut' },
-        },
-        }}
-    >
-        {children}
-    </motion.div>
-)
 
 function Signup() {
     const navigate = useNavigate()
