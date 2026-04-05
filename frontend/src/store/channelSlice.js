@@ -49,13 +49,33 @@ const channelSlice = createSlice({
         setActiveChannel: (state, action) => {
             state.activeChannel = action.payload
         },
-        // Called on socket receive message to update sidebar preview
         updateLastMessage: (state, action) => {
             const { channelId, message } = action.payload
             const ch = state.channels.find(c => c._id === channelId)
             if (ch) ch.lastMessage = message
         },
-        clearChannelError: (state) => { state.error = null }
+        clearChannelError: (state) => { state.error = null },
+
+        upsertChannel: (state, action) => {
+            const updated = action.payload
+            const idx = state.channels.findIndex(c => c._id === updated._id)
+            if (idx >= 0) {
+                state.channels[idx] = updated
+                if (state.activeChannel?._id === updated._id) {
+                    state.activeChannel = updated
+                }
+            } else {
+                state.channels.unshift(updated)
+            }
+        },
+
+        removeChannel: (state, action) => {
+            const { channelId } = action.payload
+            state.channels = state.channels.filter(c => c._id !== channelId)
+            if (state.activeChannel?._id === channelId) {
+                state.activeChannel = null
+            }
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -67,5 +87,5 @@ const channelSlice = createSlice({
     }
 })
 
-export const { setActiveChannel, updateLastMessage, clearChannelError } = channelSlice.actions
+export const { setActiveChannel, updateLastMessage, clearChannelError, upsertChannel, removeChannel } = channelSlice.actions
 export default channelSlice.reducer

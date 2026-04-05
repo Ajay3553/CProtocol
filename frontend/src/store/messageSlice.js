@@ -4,7 +4,7 @@ import apiClient from '../utils/apiClient'
 // Async thunks
 export const fetchMessages = createAsyncThunk('messages/fetch', async (channelId, { rejectWithValue }) => {
     try {
-        const res = await apiClient.get(`/api/messages/${channelId}`)
+        const res = await apiClient.get(`/api/messages/channel-messages/${channelId}`)
         return { channelId, messages: res.data.data }
     } catch (e) {
         return rejectWithValue(e?.response?.data?.message || 'Failed to fetch messages')

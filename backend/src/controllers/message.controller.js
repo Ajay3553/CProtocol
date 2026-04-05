@@ -11,116 +11,156 @@ const roleHierarchy = {
     Admin: 4
 };
 
+// Send Message
 const sendMessage = asyncHandler(async (req, res) => {
-    const {channelId, content, minVisibilityRole} = req.body;
-    if(!content || content.trim() === "") throw new apiError(400, "Message Content Required");
+    const { channelId, content, minVisibilityRole } = req.body;
+    if (!content || content.trim() === "") throw new apiError(400, "Message Content Required");
 
     const channel = await Channel.findById(channelId);
-    if(!channel) throw new apiError(404, "Channel not Found");
+    if (!channel) throw new apiError(404, "Channel not Found");
 
-    const participants = channel.participants.find(
+    const participant = channel.participants.find(
         p => p.user.toString() === req.user._id.toString()
     );
-    if(!participants) throw new apiError(403, "You are not a member of this Channel");
+    if (!participant) throw new apiError(403, "You are not a member of this Channel");
 
     const message = await Message.create({
         channel: channelId,
         sender: req.user._id,
         content,
-        minVisibilityRole : minVisibilityRole || "Observer"
+        minVisibilityRole: minVisibilityRole || "Observer"
     });
+
+    // Populate sender so the socket payload has full user data
+    await message.populate("sender", "username fullName avatar");
 
     channel.lastMessage = message._id;
     await channel.save();
+
+    // Emit to all users in the channel room
+    const io = req.app.get("io");
+    if (io) {
+        io.to(channelId.toString()).emit("receive_message", message);
+    }
 
     return res.status(201).json(
         new apiResponse(201, message, "Message sent Successfully")
     );
 });
 
-// Get Channal messages
+// Get Channel Messages
 const getChannelMessages = asyncHandler(async (req, res) => {
-    const {channelId} = req.params;
-    const channel = await Channel.findById(channelId);
-    if(!channel) throw new apiError(404, "Channel not Found");
+    const { channelId } = req.params;
 
-    const participant = channel.participants.find((p) => {
-        return p.user.toString() === req.user._id.toString();
-    });
-    if(!participant) throw new apiError(403, "Access denied");
+    const channel = await Channel.findById(channelId);
+    if (!channel) throw new apiError(404, "Channel not Found");
+
+    const participant = channel.participants.find(
+        p => p.user.toString() === req.user._id.toString()
+    );
+    if (!participant) throw new apiError(403, "Access denied");
 
     const userRole = participant.channelRole;
 
-    const message = await Message.find({
+    const messages = await Message.find({
         channel: channelId,
         isDeleted: false
-    }).populate("sender", "username fullName avatar").sort({createdAt: 1});
+    })
+        .populate("sender", "username fullName avatar")
+        .sort({ createdAt: 1 });
 
-    const visibleMessage = message.filter(message =>{
-        return(
-            roleHierarchy[userRole] >= roleHierarchy[message.minVisibilityRole]
-        );
-    });
+    const visibleMessages = messages.filter(msg =>
+        roleHierarchy[userRole] >= roleHierarchy[msg.minVisibilityRole]
+    );
 
     return res.status(200).json(
-        new apiResponse(200, visibleMessage, "Message fetched")
+        new apiResponse(200, visibleMessages, "Messages fetched")
     );
 });
 
-//Edit Message
-const editMessage = asyncHandler(async(req, res) => {
-    const {messageId} = req.params;
-    const {content} = req.body;
-    if(!content || content.trim() === "") throw new apiError(400, "Message content Required");
-    
+// Edit Message
+const editMessage = asyncHandler(async (req, res) => {
+    const { messageId } = req.params;
+    const { content } = req.body;
+    if (!content || content.trim() === "") throw new apiError(400, "Message content Required");
+
     const message = await Message.findById(messageId);
-    if(!message) throw new apiError(404, "Message content Required");
-    if(message.sender.toString() !== req.user._id.toString()) throw new apiError(403, "You can Only edit your own message");
+    if (!message) throw new apiError(404, "Message not Found");
+    if (message.sender.toString() !== req.user._id.toString())
+        throw new apiError(403, "You can only edit your own message");
 
     message.content = content;
     message.isEdited = true;
-
     await message.save();
+
+    // Populate sender so frontend keeps the correct bubble side
+    await message.populate("sender", "username fullName avatar");
+
+    // Notify all other users in the channel that this message was edited
+    const io = req.app.get("io");
+    if (io) {
+        io.to(message.channel.toString()).emit("message:updated", message);
+    }
+
     return res.status(200).json(
         new apiResponse(200, message, "Message updated Successfully")
     );
 });
 
-//Delete Message
+
+// Delete Message (soft-delete)
 const deleteMessage = asyncHandler(async (req, res) => {
-    const {messageId} = req.params;
+    const { messageId } = req.params;
+
     const message = await Message.findById(messageId);
-    if(!message) throw new apiError(404, "Message not Found");
-    if(message.sender.toString() !== req.user._id.toString()) throw new apiError(403, "You can only deltet your own Message");
+    if (!message) throw new apiError(404, "Message not Found");
+    if (message.sender.toString() !== req.user._id.toString())
+        throw new apiError(403, "You can only delete your own message");
 
     message.isDeleted = true;
-    message.expiresAt = new Date(Date.now() + 24*60*60*1000);
+    message.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await message.save();
 
+    // Notify all users in the channel that this message was deleted
+    const io = req.app.get("io");
+    if (io) {
+        io.to(message.channel.toString()).emit("message:deleted", { _id: message._id });
+    }
+
     return res.status(200).json(
-        new apiResponse(200, {}, "Message Deleteed Successfully. It will be Permanently Removed in 24 hours")
+        new apiResponse(200, {}, "Message deleted. It will be permanently removed in 24 hours.")
     );
 });
 
-// TTL
-const updateMessageTTL = asyncHandler(async (req, res) =>{
-    const {messageId} = req.params;
-    const {ttlMinutes} = req.body;
+// Update Message TTL
+const updateMessageTTL = asyncHandler(async (req, res) => {
+    const { messageId } = req.params;
+    const { ttlMinutes } = req.body;
 
     const message = await Message.findById(messageId);
-    if(!message) throw new apiError(404, "Message not Found");
+    if (!message) throw new apiError(404, "Message not Found");
+    if (message.sender.toString() !== req.user._id.toString())
+        throw new apiError(403, "Not Authorized");
 
-    //only sender can update TTL
-    if(message.sender.toString() !== req.user._id.toString()) throw new apiError(403, "Not Authorized");
-    if(ttlMinutes === null || ttlMinutes === 0) message.expiresAt = undefined;
-    else message.expiresAt = new Date(Date.now() + ttlMinutes*60*1000);
-
+    if (ttlMinutes === null || ttlMinutes === 0) {
+        message.expiresAt = undefined;
+    } else {
+        message.expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    }
     await message.save();
+
+    await message.populate("sender", "username fullName avatar");
+
+    // Notify all users in the channel about the TTL change
+    const io = req.app.get("io");
+    if (io) {
+        io.to(message.channel.toString()).emit("message:updated", message);
+    }
 
     return res.status(200).json(
         new apiResponse(200, message, "TTL updated Successfully")
     );
-})
+});
 
 export {
     sendMessage,

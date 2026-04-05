@@ -110,14 +110,14 @@ const verifyLoginEmail = asyncHandler(async (req, res) => {
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
     await user.save();
-
-    await sendLoginEmailWarning(
-        user.email,
-        user.fullName,
-        req.headers["user-agent"],
-        "Location unavailable",
-        new Date().toLocaleString()
-    );
+    // TODO : commented for testing
+    // await sendLoginEmailWarning(
+    //     user.email,
+    //     user.fullName,
+    //     req.headers["user-agent"],
+    //     "Location unavailable",
+    //     new Date().toLocaleString()
+    // );
 
     return res
         .cookie("accessToken", accessToken, options)
