@@ -18,14 +18,28 @@ const initSocket = (server) => {
     // Socket Authentication Middleware
     io.use((socket, next) => {
         try {
-            const token = socket.handshake.auth?.token;
+            let token = socket.handshake.auth?.token;
+
+            // Extract token from the HTTP-only cookie if not found in auth
+            if (!token && socket.handshake.headers.cookie) {
+                const cookies = socket.handshake.headers.cookie;
+                // Parse the accessToken from the raw cookie string
+                const tokenCookie = cookies.split('; ').find(row => row.startsWith('accessToken='));
+                if (tokenCookie) {
+                    token = tokenCookie.split('=')[1];
+                }
+            }
+
+            // Reject if still no token
             if (!token) return next(new Error("Authentication Error: Token Missing"));
 
+            // Verify token
             const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
             socket.user = decoded;
             next();
         }
         catch (e) {
+            console.error("Socket Auth Error:", e.message);
             return next(new Error("Authentication Error: Invalid Token"));
         }
     });
@@ -91,6 +105,44 @@ const initSocket = (server) => {
             } catch (e) {
                 console.error("Socket send_message error:", e);
                 socket.emit("error", "Failed to send message");
+            }
+        });
+
+        // Delete Message via Socket
+        socket.on("delete_message", async ({ messageId, channelId }) => {
+            try {
+                const message = await Message.findById(messageId);
+                if (!message) return socket.emit("error", "Message not found");
+
+                // Only sender can delete
+                if (message.sender.toString() !== socket.user._id.toString()) {
+                    return socket.emit("error", "Unauthorized to delete this message");
+                }
+
+                message.isDeleted = true;
+                message.content = '';   // wipe content from DB too
+                await message.save();
+
+                // Update channel's lastMessage if this was the last one
+                const channel = await Channel.findById(channelId);
+                if (channel.lastMessage?.toString() === messageId.toString()) {
+                    // Emit with isDeleted flag so sidebar updates
+                    io.to(channelId.toString()).emit("messageDeleted", {
+                        messageId,
+                        channelId,
+                        isLastMessage: true
+                    });
+                } else {
+                    io.to(channelId.toString()).emit("messageDeleted", {
+                        messageId,
+                        channelId,
+                        isLastMessage: false
+                    });
+                }
+
+            } catch (e) {
+                console.error("Socket delete_message error:", e);
+                socket.emit("error", "Failed to delete message");
             }
         });
 

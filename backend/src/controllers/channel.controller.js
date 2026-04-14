@@ -253,5 +253,5 @@ export {
     removeParticipant,
     updateParticipantRole,
     deleteChannel,
-    updateChannel
+    updateChannel,
 };

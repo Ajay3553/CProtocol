@@ -145,7 +145,6 @@ const resendVerifyEmail = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
     const { email, username, password } = req.body;
-
     if (!(username || email)) throw new apiError(400, "Username or Email Required");
 
     const credentials = [];
@@ -160,24 +159,25 @@ const loginUser = asyncHandler(async (req, res) => {
 
     const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.verificationToken = verificationToken;
-    user.verificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
-    user.isVerified = false;
+    // user.verificationToken = verificationToken;
+    // user.verificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    user.isVerified = true;
 
-    await user.save();
-
-    await sendVerificationEmail(user.email, verificationToken);
-
-    return res.status(200).json(
-        new apiResponse(200, null, "OTP sent to email. Please verify to complete login.")
-    );
+    // await user.save();
 
     /* Using it Just For Testing */
-    // const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
-    // return res
-    //     .cookie("accessToken", accessToken, options)
-    //     .cookie("refreshToken", refreshToken, options)
-    //     .json(new apiResponse(200, { accessToken, refreshToken }, "Login verified successfully"));
+    // await sendVerificationEmail(user.email, verificationToken);
+
+    // return res.status(200).json(
+    //     new apiResponse(200, null, "OTP sent to email. Please verify to complete login.")
+    // );
+
+
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+    return res
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(new apiResponse(200, { accessToken, refreshToken }, "Login verified successfully"));
 });
 
 

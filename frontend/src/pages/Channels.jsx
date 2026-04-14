@@ -81,6 +81,7 @@ const groupByDate = (messages) => {
   const result = []
   let lastLabel = null
   for (const msg of messages) {
+    if (msg.isDeleted) continue
     const label = formatDateLabel(msg.createdAt)
     if (label !== lastLabel) {
       result.push({ type: 'divider', label })
@@ -123,9 +124,9 @@ const RoleBadge = ({ role, className = '' }) => {
   )
 }
 
-
-// ChannelSettingsModal (Admin only)
-function ChannelSettingsModal({ channel, onClose, onUpdated, onDeleted }) {
+// ChannelSettingsModal
+function ChannelSettingsModal({ channel, myRole, onClose, onUpdated, onDeleted }) {
+  const canDelete = myRole === 'Admin'
   const [name, setName] = useState(channel?.name || '')
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(channel?.avatar || null)
@@ -190,6 +191,7 @@ function ChannelSettingsModal({ channel, onClose, onUpdated, onDeleted }) {
         transition={{ type: 'spring', stiffness: 340, damping: 28 }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-purple-100 px-5 py-4">
           <div className="flex items-center gap-2">
             <IoSettingsOutline className="text-purple-600 text-lg" />
@@ -199,7 +201,17 @@ function ChannelSettingsModal({ channel, onClose, onUpdated, onDeleted }) {
             <IoClose />
           </button>
         </div>
+
         <div className="p-5 space-y-5">
+          {/* Role badge */}
+          <div className="flex items-center gap-2 rounded-xl bg-purple-50 px-3 py-2">
+            <IoShieldOutline className="text-purple-500 text-sm" />
+            <span className="text-xs text-purple-600 font-semibold">
+              {myRole === 'Admin' ? 'Admin — Full access' : 'Operations — Can edit name & icon'}
+            </span>
+          </div>
+
+          {/* Avatar picker */}
           <div className="flex flex-col items-center gap-3">
             <div className="relative">
               <div
@@ -221,6 +233,8 @@ function ChannelSettingsModal({ channel, onClose, onUpdated, onDeleted }) {
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             <p className="text-xs text-gray-400">Click to change group photo</p>
           </div>
+
+          {/* Name input */}
           <div>
             <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-400">Channel Name</label>
             <input
@@ -230,6 +244,8 @@ function ChannelSettingsModal({ channel, onClose, onUpdated, onDeleted }) {
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
             />
           </div>
+
+          {/* Save button */}
           <button
             onClick={handleSave}
             disabled={saving || !name.trim()}
@@ -237,30 +253,36 @@ function ChannelSettingsModal({ channel, onClose, onUpdated, onDeleted }) {
           >
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
-          <div className="h-px bg-gray-100" />
-          <div>
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-red-400">Danger Zone</p>
-            {!showDeleteConfirm ? (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-600 hover:text-white transition-colors"
-              >
-                <IoTrashOutline />Delete Channel Permanently
-              </button>
-            ) : (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                <p className="mb-3 text-sm text-red-700">
-                  Permanently delete <strong>{channel?.name}</strong>? This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancel</button>
-                  <button onClick={handleDelete} disabled={deleting} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60">
-                    {deleting ? 'Deleting…' : 'Delete'}
+
+          {/* Admin only */}
+          {canDelete && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-red-400">Danger Zone</p>
+                {!showDeleteConfirm ? (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-600 hover:text-white transition-colors"
+                  >
+                    <IoTrashOutline />Delete Channel Permanently
                   </button>
-                </div>
+                ) : (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                    <p className="mb-3 text-sm text-red-700">
+                      Permanently delete <strong>{channel?.name}</strong>? This cannot be undone.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancel</button>
+                      <button onClick={handleDelete} disabled={deleting} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60">
+                        {deleting ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </motion.div>
     </motion.div>
@@ -648,7 +670,6 @@ function Channels() {
     return byChannel[activeChannel._id] || []
   }, [activeChannel, byChannel])
 
-  const groupedMessages = useMemo(() => groupByDate(activeMessages), [activeMessages])
 
   const filteredChannels = useMemo(() => {
     return channels.filter((ch) =>
@@ -665,6 +686,7 @@ function Channels() {
   }, [activeChannel, user])
 
   const isAdmin = myRole === 'Admin'
+  const groupedMessages = useMemo(() => groupByDate(activeMessages), [activeMessages])
 
   // Fetch channels on mount
   useEffect(() => { dispatch(fetchUserChannels()) }, [dispatch])
@@ -688,18 +710,27 @@ function Channels() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeMessages.length])
 
-  // Socket setup — single source of truth for all real-time updates
+  // Socket setup
   useEffect(() => {
     if (!user?._id) return
 
-    socket.connect()
+    if (socket.disconnected) {
+      socket.connect()
+      console.log("Socket is connecting...")
+    }
 
-    socket.on('connect', () => {
+    const handleSetup = () => {
+      console.log("Socket setup running")
       socket.emit('register_user')
       if (activeChannelRef.current?._id) {
         socket.emit('join_channel', activeChannelRef.current._id)
       }
-    })
+    }
+
+    if (socket.connected) {
+      handleSetup()
+    }
+    socket.on('connect', handleSetup)
 
     socket.on('receive_message', (msg) => {
       const senderId = (msg?.sender?._id || msg?.sender)?.toString()
@@ -719,10 +750,19 @@ function Channels() {
 
     socket.on('message:deleted', (msg) => {
       if (!msg) return
-      dispatch(softDeleteMessage(msg._id || msg))
+      const messageId = msg._id || msg
+      const channelId = msg.channel
+
+      dispatch(softDeleteMessage(messageId))
+
+      if (channelId) {
+        dispatch(updateLastMessage({
+          channelId,
+          message: { _id: messageId, isDeleted: true, content: '' }
+        }))
+      }
     })
 
-    // Channel metadata / participants updated
     socket.on('channel:updated', (updated) => {
       dispatch(upsertChannel(updated))
       if (updated._id?.toString() === activeChannelRef.current?._id?.toString()) {
@@ -737,16 +777,15 @@ function Channels() {
       toast.info('You were removed from a channel or it was deleted.')
     })
 
-    // Cleanup
     return () => {
-      socket.off('connect')
+      console.log("Cleaning up socket listeners (leaving socket connected)")
+      socket.off('connect', handleSetup)
       socket.off('receive_message')
       socket.off('message:updated')
       socket.off('message:deleted')
       socket.off('channel:updated')
       socket.off('channel:created')
       socket.off('channel:removed')
-      socket.disconnect()
     }
   }, [user?._id, dispatch])
 
@@ -826,7 +865,6 @@ function Channels() {
     }
   }
 
-  // Edit message
   const handleEditMessage = async (messageId) => {
     const trimmed = editContent.trim()
     if (!trimmed) return
@@ -834,7 +872,6 @@ function Channels() {
     try {
       const res = await apiClient.patch(`/api/messages/edit/${messageId}`, { content: trimmed })
       const originalMsg = activeMessages.find((m) => m._id === messageId)
-
       const resolvedSender =
         (typeof res.data.data?.sender === 'object' && res.data.data.sender?._id
           ? res.data.data.sender
@@ -869,6 +906,11 @@ function Channels() {
     try {
       await apiClient.delete(`/api/messages/delete/${messageId}`)
       dispatch(softDeleteMessage(messageId))
+      dispatch(updateLastMessage({
+        channelId: activeChannel._id,
+        message: { _id: messageId, isDeleted: true, content: '' }
+      }))
+
       toast.success('Message deleted')
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to delete message')
@@ -1003,7 +1045,9 @@ function Channels() {
                             <span className="shrink-0 text-[10px] text-gray-400">{formatTime(channel?.updatedAt)}</span>
                           </div>
                           <p className="mt-0.5 truncate text-xs text-gray-500">
-                            {channel?.lastMessage?.content || 'No messages yet'}
+                            {channel.lastMessage?.isDeleted
+                              ? 'Message deleted'
+                              : (channel.lastMessage?.content || '')}
                           </p>
                         </div>
                       </button>
@@ -1061,7 +1105,7 @@ function Channels() {
                 >
                   <IoPeopleOutline className="text-xl" />
                 </button>
-                {isAdmin && (
+                {(isAdmin || myRole === 'Operations') && (
                   <button
                     onClick={() => setShowSettings(true)}
                     className="rounded-lg p-2 text-gray-400 hover:bg-purple-50 hover:text-purple-700"
@@ -1122,7 +1166,7 @@ function Channels() {
                       const senderName =
                         senderObj?.fullName ||
                         senderObj?.username ||
-                        (isOwnMessage ? (user?.fullName || user?.username) : null)
+                        (isOwnMessage ? (user?.fullName || user?.username) : `User …${senderId?.slice(-4) ?? ''}`)
                       const senderAvatar =
                         senderObj?.avatar ||
                         (isOwnMessage ? user?.avatar : null)
@@ -1131,98 +1175,110 @@ function Channels() {
                       const isTTLPanelOpen = ttlId === message._id
 
                       return (
-                        <motion.div
-                          key={message._id}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.15 }}
-                          className={`group flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}
-                        >
-                          <div className="mb-1">
-                            <Avatar
-                              src={senderAvatar}
-                              name={senderName}
-                              size="h-8 w-8"
-                              color={getAvatarColor(senderId)}
-                            />
-                          </div>
-
-                          <div className={`flex max-w-[70%] flex-col gap-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}>
-                            {!isOwnMessage && (
-                              <span className="ml-1 text-xs font-medium text-purple-600">
-                                {senderName}
-                              </span>
-                            )}
-
-                            {isEditing ? (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  autoFocus
-                                  value={editContent}
-                                  onChange={(e) => setEditContent(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleEditMessage(message._id)
-                                    if (e.key === 'Escape') { setEditingId(null); setEditContent('') }
-                                  }}
-                                  className="min-w-[200px] rounded-xl border border-purple-400 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
-                                />
-                                <button onClick={() => handleEditMessage(message._id)} disabled={editSaving} className="text-green-500 hover:text-green-700 disabled:opacity-50"><IoCheckmarkOutline className="text-lg" /></button>
-                                <button onClick={() => { setEditingId(null); setEditContent('') }} className="text-gray-400 hover:text-gray-600"><IoClose className="text-lg" /></button>
-                              </div>
-                            ) : (
-                              <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm ${
-                                message?.isDeleted
-                                  ? 'bg-gray-100 text-gray-400 italic border border-gray-200'
-                                  : isOwnMessage
-                                  ? 'bg-purple-600 text-white rounded-br-sm'
-                                  : 'border border-purple-100 bg-white text-gray-800 rounded-bl-sm'
-                              }`}>
-                                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                                  {message?.isDeleted ? 'This message was deleted.' : message?.content}
-                                </p>
-                                <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] ${isOwnMessage ? 'text-purple-200 justify-end' : 'text-gray-400'}`}>
-                                  <span>{formatTime(message?.createdAt)}</span>
-                                  {message?.isEdited && !message?.isDeleted && <span>· edited</span>}
-                                  {message?.minVisibilityRole && message.minVisibilityRole !== 'Observer' && (
-                                    <span className="flex items-center gap-0.5 rounded-full bg-white/20 px-1.5 py-0.5">
-                                      <IoLockClosedOutline className="text-[9px]" />{message.minVisibilityRole}+
-                                    </span>
-                                  )}
-                                  {message?.expiresAt && !message?.isDeleted && (
-                                    <span className="flex items-center gap-0.5" title={`Expires: ${new Date(message.expiresAt).toLocaleString()}`}>
-                                      <IoTimerOutline className="text-[10px]" />TTL
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {isTTLPanelOpen && (
-                              <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                                <IoTimerOutline className="shrink-0 text-amber-500" />
-                                <input
-                                  autoFocus
-                                  type="number"
-                                  min="0"
-                                  placeholder="Minutes (0 = remove TTL)"
-                                  value={ttlMinutes}
-                                  onChange={(e) => setTtlMinutes(e.target.value)}
-                                  className="w-44 rounded-lg border border-amber-200 bg-white px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-amber-200"
-                                />
-                                <button onClick={() => handleTTLUpdate(message._id)} disabled={ttlSaving} className="text-xs font-semibold text-amber-600 hover:text-amber-800 disabled:opacity-50">Set</button>
-                                <button onClick={() => { setTtlId(null); setTtlMinutes('') }} className="text-gray-400 hover:text-gray-600"><IoClose className="text-sm" /></button>
-                              </div>
-                            )}
-                          </div>
-
-                          {isOwnMessage && !message?.isDeleted && !isEditing && (
-                            <div className="mb-1 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                              <button onClick={() => { setEditingId(message._id); setEditContent(message.content); setTtlId(null) }} className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-100 hover:text-purple-700"><IoPencilOutline className="text-sm" /></button>
-                              <button onClick={() => handleDeleteMessage(message._id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-100 hover:text-red-600"><IoTrashOutline className="text-sm" /></button>
-                              <button onClick={() => { setTtlId(ttlId === message._id ? null : message._id); setTtlMinutes(''); setEditingId(null) }} className={`rounded-lg p-1.5 text-gray-400 hover:bg-amber-100 hover:text-amber-600 ${isTTLPanelOpen ? 'bg-amber-100 text-amber-600' : ''}`}><IoTimerOutline className="text-sm" /></button>
+                        message.isDeleted ? null : (
+                          <motion.div
+                            key={message._id}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className={`group flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}
+                          >
+                            <div className="mb-1">
+                              <Avatar
+                                src={senderAvatar}
+                                name={senderName}
+                                size="h-8 w-8"
+                                color={getAvatarColor(senderId)}
+                              />
                             </div>
-                          )}
-                        </motion.div>
+
+                            <div className={`flex max-w-[70%] flex-col gap-1 ${isOwnMessage ? 'items-end' : 'items-start'}`}>
+                              {!isOwnMessage && (
+                                <span className="ml-1 text-xs font-medium text-purple-600">
+                                  {senderName}
+                                </span>
+                              )}
+
+                              {isEditing ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    autoFocus
+                                    value={editContent}
+                                    onChange={(e) => setEditContent(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleEditMessage(message._id)
+                                      if (e.key === 'Escape') { setEditingId(null); setEditContent('') }
+                                    }}
+                                    className="min-w-[200px] rounded-xl border border-purple-400 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                                  />
+                                  <button onClick={() => handleEditMessage(message._id)} disabled={editSaving} className="text-green-500 hover:text-green-700 disabled:opacity-50">
+                                    <IoCheckmarkOutline className="text-lg" />
+                                  </button>
+                                  <button onClick={() => { setEditingId(null); setEditContent('') }} className="text-gray-400 hover:text-gray-600">
+                                    <IoClose className="text-lg" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm ${
+                                  isOwnMessage
+                                    ? 'bg-purple-600 text-white rounded-br-sm'
+                                    : 'border border-purple-100 bg-white text-gray-800 rounded-bl-sm'
+                                }`}>
+                                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                    {message?.content}
+                                  </p>
+                                  <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] ${isOwnMessage ? 'text-purple-200 justify-end' : 'text-gray-400'}`}>
+                                    <span>{formatTime(message?.createdAt)}</span>
+                                    {message?.isEdited && <span>· edited</span>}
+                                    {message?.minVisibilityRole && message.minVisibilityRole !== 'Observer' && (
+                                      <span className="flex items-center gap-0.5 rounded-full bg-white/20 px-1.5 py-0.5">
+                                        <IoLockClosedOutline className="text-[9px]" />{message.minVisibilityRole}+
+                                      </span>
+                                    )}
+                                    {message?.expiresAt && (
+                                      <span className="flex items-center gap-0.5" title={`Expires: ${new Date(message.expiresAt).toLocaleString()}`}>
+                                        <IoTimerOutline className="text-[10px]" />TTL
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {isTTLPanelOpen && (
+                                <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                  <IoTimerOutline className="shrink-0 text-amber-500" />
+                                  <input
+                                    autoFocus
+                                    type="number"
+                                    min="0"
+                                    placeholder="Minutes (0 = remove TTL)"
+                                    value={ttlMinutes}
+                                    onChange={(e) => setTtlMinutes(e.target.value)}
+                                    className="w-44 rounded-lg border border-amber-200 bg-white px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-amber-200"
+                                  />
+                                  <button onClick={() => handleTTLUpdate(message._id)} disabled={ttlSaving} className="text-xs font-semibold text-amber-600 hover:text-amber-800 disabled:opacity-50">Set</button>
+                                  <button onClick={() => { setTtlId(null); setTtlMinutes('') }} className="text-gray-400 hover:text-gray-600">
+                                    <IoClose className="text-sm" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {isOwnMessage && !message?.isDeleted && !isEditing && (
+                              <div className="mb-1 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button onClick={() => { setEditingId(message._id); setEditContent(message.content); setTtlId(null) }} className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-100 hover:text-purple-700">
+                                  <IoPencilOutline className="text-sm" />
+                                </button>
+                                <button onClick={() => handleDeleteMessage(message._id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-100 hover:text-red-600">
+                                  <IoTrashOutline className="text-sm" />
+                                </button>
+                                <button onClick={() => { setTtlId(ttlId === message._id ? null : message._id); setTtlMinutes(''); setEditingId(null) }} className={`rounded-lg p-1.5 text-gray-400 hover:bg-amber-100 hover:text-amber-600 ${isTTLPanelOpen ? 'bg-amber-100 text-amber-600' : ''}`}>
+                                  <IoTimerOutline className="text-sm" />
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        )
                       )
                     })}
                     <div ref={messagesEndRef} />
@@ -1351,7 +1407,11 @@ function Channels() {
                           <button
                             key={type}
                             onClick={() => setNewType(type)}
-                            className={`rounded-xl border py-2.5 text-sm font-semibold capitalize transition ${newType === type ? 'border-purple-500 bg-purple-600 text-white' : 'border-gray-200 text-gray-600 hover:border-purple-300'}`}
+                            className={`rounded-xl border py-2.5 text-sm font-semibold capitalize transition ${
+                              newType === type
+                                ? 'border-purple-500 bg-purple-600 text-white'
+                                : 'border-gray-200 text-gray-600 hover:border-purple-300'
+                            }`}
                           >
                             {type === 'group' ? '👥 Group' : '💬 Direct'}
                           </button>
@@ -1369,12 +1429,15 @@ function Channels() {
                         placeholder="username"
                         className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                       />
+                      <p className="mt-1 text-xs text-gray-400">
+                        {newType === 'direct' ? 'Required — direct channel needs exactly 1 participant' : 'Optional for group channel'}
+                      </p>
                     </div>
                   </div>
                   <button
                     onClick={handleCreateChannel}
                     disabled={creating}
-                    className="mt-6 w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-60"
+                    className="mt-6 w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white transition hover:bg-purple-700 disabled:opacity-60"
                   >
                     {creating ? 'Creating…' : 'Create Channel'}
                   </button>
@@ -1386,9 +1449,10 @@ function Channels() {
 
         {/* Channel Settings Modal */}
         <AnimatePresence>
-          {showSettings && activeChannel && isAdmin && (
+          {showSettings && activeChannel && (isAdmin || myRole === 'Operations') && (
             <ChannelSettingsModal
               channel={activeChannel}
+              myRole={myRole}
               onClose={() => setShowSettings(false)}
               onUpdated={(updated) => {
                 dispatch(upsertChannel(updated))

@@ -51,10 +51,14 @@ function Login() {
 
             toast.success(result.message || 'OTP sent to your email!')
             reset()
-            navigate('/verify-email', {
-                state: { email: data.username, type: 'login' },
-                replace: true
-            })
+            // commented for testing
+            // navigate('/verify-email', {
+            //     state: { email: data.username, type: 'login' },
+            //     replace: true
+            // })
+            // remove it after testing
+            await dispatch(fetchCurrentUser()).unwrap()
+            navigate('/channels');
 
         } catch (e) {
             console.error('Login error:', e)

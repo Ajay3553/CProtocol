@@ -178,14 +178,11 @@ function VerifyEmail() {
             })
 
             const result = await response.json()
-            console.log('Verify response:', { status: response.status, result })
 
             if (!response.ok) {
                 throw new Error(result?.message || 'Verification failed')
             }
 
-            // ✅ Backend already sets cookies for BOTH signup & login
-            // ✅ So just fetch user and redirect to /channels
             await dispatch(fetchCurrentUser()).unwrap()
 
             toast.success(result?.message || config.successMessage)
