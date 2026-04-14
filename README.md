@@ -45,7 +45,6 @@ The goal is to build a secure, role-based, and offline-friendly messaging system
 | Per-Recipient Wrapped Keys         |                ✔️                |     ❌    |         ❌         |         ❌         |
 | Auditable Logs (privacy preserved) |                ✔️                |     ❌    |         ❌         |         ❌         |
 | Designed for unstable networks     |                ✔️                |     ❌    |         ⚠️        |         ❌         |
-| MERN Stack Prototype               |                ✔️                |     ❌    |         ❌         |         ❌         |
 
 **Key:**
 
@@ -62,6 +61,9 @@ This table highlights where CProtocol aims to differentiate itself from common m
 This project is currently under development and represents an initial architectural setup. Core functionality and features are planned but not yet fully implemented.
 
 ---
+
+## Database Model Architecture
+[View the diagram](https://dbdiagram.io/d/CProtocol-69a80728a3f0aa31e1c629ca)
 
 ## Vision
 
