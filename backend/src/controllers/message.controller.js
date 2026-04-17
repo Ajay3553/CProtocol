@@ -16,11 +16,11 @@ const sendMessage = asyncHandler(async (req, res) => {
     const { channelId, content, minVisibilityRole } = req.body;
     if (!content || content.trim() === "") throw new apiError(400, "Message Content Required");
 
-    const channel = await Channel.findById(channelId);
+    const channel = await Channel.findById(channelId).populate('participants.user', '_id');
     if (!channel) throw new apiError(404, "Channel not Found");
 
     const participant = channel.participants.find(
-        p => p.user.toString() === req.user._id.toString()
+        p => (p.user?._id || p.user).toString() === req.user._id.toString()
     );
     if (!participant) throw new apiError(403, "You are not a member of this Channel");
 
@@ -31,16 +31,32 @@ const sendMessage = asyncHandler(async (req, res) => {
         minVisibilityRole: minVisibilityRole || "Observer"
     });
 
-    // Populate sender so the socket payload has full user data
     await message.populate("sender", "username fullName avatar");
 
     channel.lastMessage = message._id;
     await channel.save();
 
-    // Emit to all users in the channel room
     const io = req.app.get("io");
     if (io) {
-        io.to(channelId.toString()).emit("receive_message", message);
+        const minLevel = roleHierarchy[message.minVisibilityRole] || 1;
+        const socketsInRoom = await io.in(channelId.toString()).fetchSockets();
+
+        for (const sock of socketsInRoom) {
+            const sockUserId = sock.user?._id?.toString();
+            if (!sockUserId) continue;
+
+            if (sockUserId === req.user._id.toString()) continue;
+
+            const sockParticipant = channel.participants.find(
+                p => (p.user?._id || p.user).toString() === sockUserId
+            );
+            const userRole = sockParticipant?.channelRole || 'Observer';
+            const userLevel = roleHierarchy[userRole] || 1;
+
+            if (userLevel >= minLevel) {
+                sock.emit("receive_message", message); // ← individual, not broadcast
+            }
+        }
     }
 
     return res.status(201).json(
@@ -93,10 +109,8 @@ const editMessage = asyncHandler(async (req, res) => {
     message.isEdited = true;
     await message.save();
 
-    // Populate sender so frontend keeps the correct bubble side
     await message.populate("sender", "username fullName avatar");
 
-    // Notify all other users in the channel that this message was edited
     const io = req.app.get("io");
     if (io) {
         io.to(message.channel.toString()).emit("message:updated", message);
@@ -107,8 +121,7 @@ const editMessage = asyncHandler(async (req, res) => {
     );
 });
 
-
-// Delete Message (soft-delete)
+// Delete Message
 const deleteMessage = asyncHandler(async (req, res) => {
     const { messageId } = req.params;
 
@@ -121,7 +134,6 @@ const deleteMessage = asyncHandler(async (req, res) => {
     message.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await message.save();
 
-    // Notify all users in the channel that this message was deleted
     const io = req.app.get("io");
     if (io) {
         io.to(message.channel.toString()).emit("message:deleted", { _id: message._id });
@@ -151,7 +163,6 @@ const updateMessageTTL = asyncHandler(async (req, res) => {
 
     await message.populate("sender", "username fullName avatar");
 
-    // Notify all users in the channel about the TTL change
     const io = req.app.get("io");
     if (io) {
         io.to(message.channel.toString()).emit("message:updated", message);

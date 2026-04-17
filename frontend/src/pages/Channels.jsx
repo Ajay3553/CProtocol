@@ -522,12 +522,12 @@ function MembersPanel({ activeChannel, myRole, user, onClose, onRoleChange, onRe
   return (
     <>
       <motion.aside
-        initial={{ x: 300, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 300, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-        className="flex h-full w-[280px] flex-shrink-0 flex-col border-l border-purple-100 bg-white"
-      >
+          initial={{ x: 300, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 300, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+          className="absolute right-0 top-0 z-20 flex h-full w-[280px] flex-shrink-0 flex-col border-l border-purple-100 bg-white shadow-xl lg:relative lg:z-auto lg:shadow-none"
+        >
         <div className="flex shrink-0 items-center justify-between border-b border-purple-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="font-bold text-gray-800 text-sm">Group Details</span>
@@ -636,6 +636,7 @@ function Channels() {
   const textareaRef = useRef(null)
   const activeChannelRef = useRef(null)
   const userRef = useRef(null)
+  const myRoleRef = useRef('Observer')
 
   const { channels = [], activeChannel, isLoading: channelLoading } = useSelector((s) => s.channels)
   const { byChannel = {}, isLoading: messageLoading } = useSelector((s) => s.messages)
@@ -661,9 +662,18 @@ function Channels() {
   const [showMembersPanel, setShowMembersPanel] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
+  const myRole = useMemo(() => {
+    if (!activeChannel || !user) return 'Agent'
+    const me = activeChannel.participants?.find(
+      (p) => (p.user?._id || p.user)?.toString() === user?._id?.toString()
+    )
+    return me?.channelRole || 'Agent'
+  }, [activeChannel, user])
+
   // Keep refs in sync so all socket callbacks always have latest values
   useEffect(() => { activeChannelRef.current = activeChannel }, [activeChannel])
   useEffect(() => { userRef.current = user }, [user])
+  useEffect(() => {myRoleRef.current = myRole}, [myRole])
 
   const activeMessages = useMemo(() => {
     if (!activeChannel?._id) return []
@@ -677,13 +687,6 @@ function Channels() {
     )
   }, [channels, searchTerm])
 
-  const myRole = useMemo(() => {
-    if (!activeChannel || !user) return 'Agent'
-    const me = activeChannel.participants?.find(
-      (p) => (p.user?._id || p.user)?.toString() === user?._id?.toString()
-    )
-    return me?.channelRole || 'Agent'
-  }, [activeChannel, user])
 
   const isAdmin = myRole === 'Admin'
   const groupedMessages = useMemo(() => groupByDate(activeMessages), [activeMessages])
@@ -733,9 +736,15 @@ function Channels() {
     socket.on('connect', handleSetup)
 
     socket.on('receive_message', (msg) => {
+      const ROLE_HIERARCHY = { Observer: 1, Agent: 2, Operations: 3, Admin: 4 }
+      const myLevel = ROLE_HIERARCHY[myRoleRef.current] || 1
+      const minLevel = ROLE_HIERARCHY[msg.minVisibilityRole] || 1
+      if (myLevel < minLevel) return
+
       const senderId = (msg?.sender?._id || msg?.sender)?.toString()
       const currentUserId = userRef.current?._id?.toString()
       if (senderId && currentUserId && senderId === currentUserId) return
+
       const channelId = normalizeChannelId(msg?.channel)
       const normalizedMsg = { ...msg, channel: channelId }
       dispatch(addIncomingMessage(normalizedMsg))
@@ -1044,11 +1053,11 @@ function Channels() {
                             </span>
                             <span className="shrink-0 text-[10px] text-gray-400">{formatTime(channel?.updatedAt)}</span>
                           </div>
-                          <p className="mt-0.5 truncate text-xs text-gray-500">
+                          {/* <p className="mt-0.5 truncate text-xs text-gray-500">
                             {channel.lastMessage?.isDeleted
                               ? 'Message deleted'
                               : (channel.lastMessage?.content || '')}
-                          </p>
+                          </p> */}
                         </div>
                       </button>
                     )
@@ -1119,7 +1128,7 @@ function Channels() {
           </div>
 
           {/* Chat area + Members panel */}
-          <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="relative flex min-h-0 flex-1 overflow-hidden">
             <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
                 {!activeChannel ? (

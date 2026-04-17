@@ -3,6 +3,8 @@ import { Message } from "../models/message.models.js";
 import { Channel } from "../models/channel.model.js";
 import jwt from "jsonwebtoken";
 
+const ROLE_HIERARCHY = {Observer : 1, Agent : 2, Operations : 3, Admin : 4};
+
 const userSocketMap = new Map();
 
 let io;
@@ -72,41 +74,57 @@ const initSocket = (server) => {
 
         // Send Message via Socket
         socket.on("send_message", async (data) => {
-            try {
-                const { channelId, content, ttlMinutes, minVisibilityRole } = data;
+        try {
+            const { channelId, content, ttlMinutes, minVisibilityRole } = data;
 
-                const channel = await Channel.findById(channelId);
-                if (!channel) return socket.emit("error", "Channel not found");
+            const channel = await Channel.findById(channelId).populate('participants.user', '_id');
+            if (!channel) return socket.emit("error", "Channel not found");
 
-                const participant = channel.participants.find(
-                    (p) => p.user.toString() === socket.user._id.toString()
-                );
-                if (!participant) return socket.emit("error", "You are not a member of this channel");
+            const participant = channel.participants.find(
+                (p) => (p.user?._id || p.user).toString() === socket.user._id.toString()
+            );
+            if (!participant) return socket.emit("error", "You are not a member of this channel");
 
-                let expiresAt = null;
-                if (ttlMinutes && ttlMinutes > 0) {
-                    expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
-                }
-
-                const message = await Message.create({
-                    channel: channelId,
-                    sender: socket.user._id,
-                    content,
-                    minVisibilityRole: minVisibilityRole || "Observer",
-                    expiresAt,
-                });
-
-                await Channel.findByIdAndUpdate(channelId, { lastMessage: message._id });
-
-                const populatedMessage = await Message.findById(message._id)
-                    .populate("sender", "username fullName avatar");
-
-                io.to(channelId.toString()).emit("receive_message", populatedMessage);
-            } catch (e) {
-                console.error("Socket send_message error:", e);
-                socket.emit("error", "Failed to send message");
+            let expiresAt = null;
+            if (ttlMinutes && ttlMinutes > 0) {
+                expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
             }
-        });
+
+            const message = await Message.create({
+                channel: channelId,
+                sender: socket.user._id,
+                content,
+                minVisibilityRole: minVisibilityRole || "Observer",
+                expiresAt,
+            });
+
+            await Channel.findByIdAndUpdate(channelId, { lastMessage: message._id });
+
+            const populatedMessage = await Message.findById(message._id)
+                .populate("sender", "username fullName avatar");
+
+            const minLevel = ROLE_HIERARCHY[populatedMessage.minVisibilityRole] || 1;
+
+            const socketsInRoom = await io.in(channelId.toString()).fetchSockets();
+
+            for (const sock of socketsInRoom) {
+                const sockUserId = sock.user?._id?.toString();
+                if (!sockUserId) continue;
+
+                const sockParticipant = channel.participants.find(
+                    (p) => (p.user?._id || p.user).toString() === sockUserId
+                );
+                const userRole = sockParticipant?.channelRole || 'Observer';
+                const userLevel = ROLE_HIERARCHY[userRole] || 1;
+
+                if (userLevel >= minLevel) sock.emit("receive_message", populatedMessage);
+            }
+
+        } catch (e) {
+            console.error("Socket send_message error:", e);
+            socket.emit("error", "Failed to send message");
+        }
+    });
 
         // Delete Message via Socket
         socket.on("delete_message", async ({ messageId, channelId }) => {
