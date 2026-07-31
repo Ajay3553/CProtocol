@@ -15,6 +15,8 @@ import VerifyEmail from './pages/userPages/VerifyEmail.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import PublicRoute from './components/PublicRoute.jsx'
 import Dashboard from './pages/userPages/Dashboard.jsx'
+import UpdateUserData from './pages/userPages/UpdateUserData.jsx'
+import ChangePassword from './pages/userPages/ChangePassword.jsx'
 
 const router = createBrowserRouter([
   {
@@ -66,6 +68,22 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute >
             <Dashboard />
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: '/update-data',
+        element: (
+          <ProtectedRoute>
+            <UpdateUserData />
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: '/update-password',
+        element: (
+          <ProtectedRoute>
+            <ChangePassword />
           </ProtectedRoute>
         )
       }

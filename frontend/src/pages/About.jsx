@@ -297,7 +297,7 @@ function About() {
           {[
             {
               phase: 'Phase 1',
-              status: '✅ Done',
+              status: 'Done',
               title: 'Secure Auth',
               desc: 'JWT-based authentication with protected routes and role-based access.',
               statusColor: 'text-green-600',
@@ -305,7 +305,7 @@ function About() {
             },
             {
               phase: 'Phase 2',
-              status: '✅ Done',
+              status: 'Done',
               title: 'Message TTL',
               desc: 'Self-destructing messages with configurable time-to-live expiry.',
               statusColor: 'text-green-600',

@@ -91,8 +91,6 @@ function Login() {
                                 src={logo}
                                 alt="CProtocol Logo"
                                 className="w-full h-full"
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.95 }}
                             />
                         </Link>
                     </motion.div>
@@ -168,8 +166,6 @@ function Login() {
                                             type="button"
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-purple-600"
                                             onClick={() => setShowPassword(!showPassword)}
-                                            whileHover={{ scale: 1.1 }}
-                                            whileTap={{ scale: 0.9 }}
                                         >
                                             {showPassword ? (
                                                 <IoEyeOffOutline className="text-lg" />

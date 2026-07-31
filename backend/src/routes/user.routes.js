@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { changeCurrentPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendVerifyEmail, verifyEmail, verifyLoginEmail } from '../controllers/user.controller.js';
+import { changeCurrentPassword, getCurrentUser, loginUser, logoutUser, registerUser, resendVerifyEmail, updateUserData, verifyChangePasswordOTP, verifyEmail, verifyLoginEmail } from '../controllers/user.controller.js';
 import { upload } from '../middleware/multer.middleware.js';
 import { verifyJWT } from '../middleware/auth.middleware.js';
 
@@ -25,6 +25,19 @@ router.route('/resend-verify-email').post(resendVerifyEmail);
 // protected
 router.route('/logout').post(verifyJWT, logoutUser);
 router.route('/change-password').post(verifyJWT, changeCurrentPassword);
+router.route('/verify-change-password-otp').post(verifyJWT, verifyChangePasswordOTP);
 router.route('/current-user').get(verifyJWT, getCurrentUser);
+router.route('/update-data').patch(
+    verifyJWT,
+    upload.fields(
+        [
+            {
+                name: "avatar",
+                maxCount: 1
+            }
+        ]
+    ),
+    updateUserData
+);
 
 export default router;

@@ -1,6 +1,6 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { User } from '../models/user.model.js';
-import { uploadOnCloudinary } from '../utils/cloudinary.js';
+import { uploadOnCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 import { apiError } from '../utils/apiError.js';
 import { apiResponse } from '../utils/apiResponse.js';
 import jwt from 'jsonwebtoken';
@@ -208,26 +208,66 @@ const logoutUser = asyncHandler(async(req, res) => {
     )
 });
 
-const changeCurrentPassword  = asyncHandler(async (req, res) =>{
-    const {oldPassword, newPassword, confirmPassword} = req.body;
-    if(newPassword !== confirmPassword) throw new apiError(400, "New Password and Confirm Password must be same");
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+    if (newPassword !== confirmPassword) {
+        throw new apiError(400, "New Password and Confirm Password must match");
+    }
 
-    const user = await User.findById(req.user?._id);
-    const isCorrectPassword = await user.isPasswordCorrect(oldPassword);
-    if(!isCorrectPassword) throw new apiError(401, "Entered Current Password is Wrong!");
+    const user = await User.findById(req.user._id);
+    const isCorrect = await user.isPasswordCorrect(oldPassword);
+    if (!isCorrect) throw new apiError(401, "Current password is incorrect");
 
-    user.password = newPassword;
-    await user.save({validateBeforeSave: false});
-    return res
-    .status(200)
-    .json(
-        new apiResponse(
-            200,
-            {},
-            "Password Change Successfully"
-        )
-    )
+    // Generate OTP and store in existing verification fields
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.verificationToken = otp;
+    user.verificationTokenExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    await user.save({ validateBeforeSave: false });
+
+    // Send OTP using your existing email function
+    await sendVerificationEmail(user.email, otp);
+
+    return res.status(200).json(
+        new apiResponse(200, null, "OTP sent to your registered email. Please verify to complete password change.")
+    );
 });
+
+
+const verifyChangePasswordOTP = asyncHandler(async (req, res) => {
+    const { otp, newPassword } = req.body; // client must send newPassword again
+
+    const user = await User.findById(req.user._id);
+    if (!user) throw new apiError(404, "User not found");
+
+    // Validate OTP
+    if (!user.verificationToken || user.verificationToken !== otp) {
+        throw new apiError(400, "Invalid OTP");
+    }
+    if (new Date() > user.verificationTokenExpiry) {
+        throw new apiError(400, "OTP expired. Please request a new one.");
+    }
+
+    // Change password
+    user.password = newPassword;
+    // Clear OTP fields (so they can be reused later)
+    user.verificationToken = undefined;
+    user.verificationTokenExpiry = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    // Send warning email
+    await sendLoginEmailWarning(
+        user.email,
+        user.fullName,
+        req.headers["user-agent"] || "Unknown device",
+        "IP unknown",
+        new Date().toLocaleString()
+    );
+
+    return res.status(200).json(
+        new apiResponse(200, null, "Password changed successfully")
+    );
+});
+
 
 const getCurrentUser = asyncHandler(async(req, res) => {
     const user = await User.findById(req.user?._id).select(
@@ -244,13 +284,55 @@ const getCurrentUser = asyncHandler(async(req, res) => {
     )
 });
 
+const updateUserData = asyncHandler(async (req, res) => {
+    const { newFullName } = req.body;
+
+    const user = await User.findById(req.user?._id);
+    if (!user) throw new apiError(404, "User not found");
+
+    if (newFullName?.trim()) {
+        user.fullName = newFullName.trim();
+    }
+
+    if (req.files?.avatar?.[0]?.path) {
+        const oldAvatarUrl = user.avatar;
+        const uploaded = await uploadOnCloudinary(req.files.avatar[0].path);
+
+        if (!uploaded?.url) {
+            throw new apiError(500, "Failed to upload new avatar. Your current avatar is unchanged.");
+        }
+        user.avatar = uploaded.url;
+
+        if(oldAvatarUrl) {
+            deleteFromCloudinary(oldAvatarUrl).catch((err) =>
+                console.error("Failed to delete old avatar from Cloudinary:", err)
+            );
+        }
+    }
+
+    await user.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(user._id).select(
+        "-password -refreshToken -verificationToken -verificationTokenExpiry"
+    );
+
+    return res.status(200).json(
+        new apiResponse(200, updatedUser, "User data updated successfully")
+    );
+});
+
+
+
+
 export {
     registerUser,
     verifyEmail,
     loginUser,
     verifyLoginEmail,
     resendVerifyEmail,
+    verifyChangePasswordOTP,
     logoutUser,
     changeCurrentPassword,
-    getCurrentUser
+    getCurrentUser,
+    updateUserData
 }
