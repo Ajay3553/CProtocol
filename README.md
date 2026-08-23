@@ -2,7 +2,7 @@
 
 ## Overview
 
-CProtocol is a proposed secure messaging platform designed for environments where privacy and controlled communication are critical. The project is currently in its initial setup phase and is being developed as a concept prototype using the MERN stack.
+CProtocol is a proposed secure messaging platform designed for environments where privacy and controlled communication are critical.
 
 ---
 
@@ -12,7 +12,6 @@ Most existing messaging applications assume stable internet connectivity and tru
 
 * Sensitive information can be exposed through server breaches
 * Messages often remain stored without proper control
-* Offline communication is unreliable
 * Different users with different clearance levels cannot share a single structured channel securely
 
 There is a need for a system that enables secure communication without trusting the server and that works even in unstable network conditions.
@@ -27,9 +26,9 @@ CProtocol aims to address these problems by providing a platform where:
 * The server only stores encrypted data
 * Users are organized by roles with controlled access to information
 * Messages can expire automatically after a set time
-* Communication continues to work even when the user is offline
+* Communication continues to work even when the user have unstable network
 
-The goal is to build a secure, role-based, and offline-friendly messaging system suitable for organizations that require structured and private communication.
+The goal is to build a secure, role-based, and user-friendly messaging system suitable for organizations that require structured and private communication.
 
 ---
 
@@ -55,15 +54,6 @@ The goal is to build a secure, role-based, and offline-friendly messaging system
 This table highlights where CProtocol aims to differentiate itself from common messaging platforms.
 
 ---
-
-## Current Status
-
-This project is currently under development and represents an initial architectural setup. Core functionality and features are planned but not yet fully implemented.
-
----
-
-## Database Model Architecture
-[View the diagram](https://dbdiagram.io/d/CProtocol-69a80728a3f0aa31e1c629ca)
 
 ## Vision
 
