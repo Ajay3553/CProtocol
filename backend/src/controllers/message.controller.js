@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Channel } from "../models/channel.model.js";
 import { Message } from "../models/message.models.js";
 import { apiResponse } from "../utils/apiResponse.js";
+import { scheduleTTLDeletion, cancelTTLDeletion } from "../socket/socket.js";
 
 const roleHierarchy = {
     Observer: 1,
@@ -13,7 +14,7 @@ const roleHierarchy = {
 
 // Send Message
 const sendMessage = asyncHandler(async (req, res) => {
-    const { channelId, content, minVisibilityRole } = req.body;
+    const { channelId, content, minVisibilityRole, ttlMinutes } = req.body;
     if (!content || content.trim() === "") throw new apiError(400, "Message Content Required");
 
     const channel = await Channel.findById(channelId).populate('participants.user', '_id');
@@ -24,11 +25,18 @@ const sendMessage = asyncHandler(async (req, res) => {
     );
     if (!participant) throw new apiError(403, "You are not a member of this Channel");
 
+    let expiresAt = null;
+    if (ttlMinutes && ttlMinutes > 0) {
+        expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    }
+
+    const isDirect = channel.type === "direct";
     const message = await Message.create({
         channel: channelId,
         sender: req.user._id,
         content,
-        minVisibilityRole: minVisibilityRole || "Observer"
+        minVisibilityRole: isDirect ? "Observer" : (minVisibilityRole || "Observer"),
+        expiresAt
     });
 
     await message.populate("sender", "username fullName avatar");
@@ -37,6 +45,9 @@ const sendMessage = asyncHandler(async (req, res) => {
     await channel.save();
 
     const io = req.app.get("io");
+    if (io && expiresAt) {
+        scheduleTTLDeletion(message._id, channelId, expiresAt, io);
+    }
     if (io) {
         const minLevel = roleHierarchy[message.minVisibilityRole] || 1;
         const socketsInRoom = await io.in(channelId.toString()).fetchSockets();
@@ -47,14 +58,18 @@ const sendMessage = asyncHandler(async (req, res) => {
 
             if (sockUserId === req.user._id.toString()) continue;
 
-            const sockParticipant = channel.participants.find(
-                p => (p.user?._id || p.user).toString() === sockUserId
-            );
-            const userRole = sockParticipant?.channelRole || 'Observer';
-            const userLevel = roleHierarchy[userRole] || 1;
+            if (isDirect) {
+                sock.emit("receive_message", message);
+            } else {
+                const sockParticipant = channel.participants.find(
+                    p => (p.user?._id || p.user).toString() === sockUserId
+                );
+                const userRole = sockParticipant?.channelRole || 'Observer';
+                const userLevel = roleHierarchy[userRole] || 1;
 
-            if (userLevel >= minLevel) {
-                sock.emit("receive_message", message); // ← individual, not broadcast
+                if (userLevel >= minLevel) {
+                    sock.emit("receive_message", message);
+                }
             }
         }
     }
@@ -77,6 +92,7 @@ const getChannelMessages = asyncHandler(async (req, res) => {
     if (!participant) throw new apiError(403, "Access denied");
 
     const userRole = participant.channelRole;
+    const isDirect = channel.type === "direct";
 
     const messages = await Message.find({
         channel: channelId,
@@ -85,9 +101,11 @@ const getChannelMessages = asyncHandler(async (req, res) => {
         .populate("sender", "username fullName avatar")
         .sort({ createdAt: 1 });
 
-    const visibleMessages = messages.filter(msg =>
-        roleHierarchy[userRole] >= roleHierarchy[msg.minVisibilityRole]
-    );
+    const visibleMessages = isDirect
+        ? messages
+        : messages.filter(msg =>
+            roleHierarchy[userRole] >= roleHierarchy[msg.minVisibilityRole]
+        );
 
     return res.status(200).json(
         new apiResponse(200, visibleMessages, "Messages fetched")
@@ -130,13 +148,24 @@ const deleteMessage = asyncHandler(async (req, res) => {
     if (message.sender.toString() !== req.user._id.toString())
         throw new apiError(403, "You can only delete your own message");
 
+    cancelTTLDeletion(messageId);
+
     message.isDeleted = true;
+    message.content = '';
     message.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await message.save();
 
     const io = req.app.get("io");
     if (io) {
-        io.to(message.channel.toString()).emit("message:deleted", { _id: message._id });
+        io.to(message.channel.toString()).emit("message:deleted", {
+            _id: message._id.toString(),
+            channel: message.channel.toString()
+        });
+        io.to(message.channel.toString()).emit("messageDeleted", {
+            messageId: message._id.toString(),
+            channelId: message.channel.toString(),
+            isDeleted: true
+        });
     }
 
     return res.status(200).json(
@@ -154,16 +183,21 @@ const updateMessageTTL = asyncHandler(async (req, res) => {
     if (message.sender.toString() !== req.user._id.toString())
         throw new apiError(403, "Not Authorized");
 
+    const io = req.app.get("io");
+
     if (ttlMinutes === null || ttlMinutes === 0) {
         message.expiresAt = undefined;
+        cancelTTLDeletion(messageId);
     } else {
         message.expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+        if (io) {
+            scheduleTTLDeletion(message._id, message.channel, message.expiresAt, io);
+        }
     }
     await message.save();
 
     await message.populate("sender", "username fullName avatar");
 
-    const io = req.app.get("io");
     if (io) {
         io.to(message.channel.toString()).emit("message:updated", message);
     }

@@ -321,8 +321,49 @@ const updateUserData = asyncHandler(async (req, res) => {
     );
 });
 
+const updatePublicKey = asyncHandler(async (req, res) => {
+    const { publicKey } = req.body;
+    if (!publicKey) throw new apiError(400, "Public key is required");
 
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                publicKey
+            }
+        },
+        {
+            new: true
+        }
+    ).select("-password -refreshToken -verificationToken -verificationTokenExpiry");
 
+    if (!user) throw new apiError(404, "User not found");
+
+    return res.status(200).json(
+        new apiResponse(200, user, "Public key updated successfully")
+    );
+});
+
+const getUserPublicKey = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+    if (!username) throw new apiError(400, "Username is required");
+
+    const user = await User.findOne({ username: username.toLowerCase() }).select(
+        "username fullName avatar publicKey"
+    );
+
+    if (!user) throw new apiError(404, "User not found");
+
+    return res.status(200).json(
+        new apiResponse(200, {
+            _id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            avatar: user.avatar,
+            publicKey: user.publicKey || ""
+        }, "Public key fetched successfully")
+    );
+});
 
 export {
     registerUser,
@@ -334,5 +375,7 @@ export {
     logoutUser,
     changeCurrentPassword,
     getCurrentUser,
-    updateUserData
+    updateUserData,
+    updatePublicKey,
+    getUserPublicKey
 }

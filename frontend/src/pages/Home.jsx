@@ -263,47 +263,6 @@ function Home() {
         </FadeInWhenVisible>
       </section>
 
-      <section className='w-full max-w-6xl mx-auto px-6 py-12 overflow-hidden'>
-        <FadeInWhenVisible direction='left'>
-          <motion.div
-            className='bg-purple-800 text-white rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between shadow-lg'
-            whileHover={{ boxShadow: '0 15px 40px rgba(88, 28, 135, 0.4)' }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className='mb-6 md:mb-0'>
-              <motion.h2
-                className='text-xl sm:text-2xl font-semibold mb-2'
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
-              >
-                🔮 Coming Soon: End-to-End Encryption
-              </motion.h2>
-              <motion.p
-                className='text-purple-200 max-w-lg text-sm sm:text-base'
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.35 }}
-              >
-                AES-256 + RSA/ECDH encryption is on the roadmap. Your messages
-                will soon be unreadable — even to our servers.
-              </motion.p>
-            </div>
-            <Link to='/about'>
-              <motion.span
-                className='inline-block bg-white text-purple-800 px-6 py-3 rounded-lg font-semibold whitespace-nowrap'
-                whileHover={{ scale: 1.05, boxShadow: '0 5px 20px rgba(255,255,255,0.3)' }}
-                whileTap={{ scale: 0.97 }}
-              >
-                Learn More →
-              </motion.span>
-            </Link>
-          </motion.div>
-        </FadeInWhenVisible>
-      </section>
-
       {/* FINAL CTA */}
       <section className='w-full text-center py-16 px-6'>
         <FadeInWhenVisible>

@@ -11,6 +11,10 @@ const participantSchema = new Schema({
         type: String,
         enum: ["Admin", "Operations", "Agent", "Observer"],
         default: "Agent"
+    },
+    encryptedKey:{
+        type: String,
+        default: ""
     }
 },
 {
@@ -45,7 +49,7 @@ const channelSchema = new Schema({
 
     isEncrypted:{
         type: Boolean,
-        default: false
+        default: true
     },
 
     encryptionMetadata:{

@@ -51,11 +51,14 @@ const initSocket = (server) => {
 
         // Register User
         socket.on("register_user", () => {
-            const userId = socket.user._id;
+            const userId = socket.user._id?.toString();
+            if (!userId) return;
             userSocketMap.set(userId, socket.id);
             console.log(`User ${userId} registered with socket ${socket.id}`);
             io.emit("user_online", userId);
             socket.join(`user:${userId}`);
+            // Emit current list of online user IDs
+            socket.emit("online_users", Array.from(userSocketMap.keys()));
         });
 
         // Join Channel Room
@@ -90,11 +93,12 @@ const initSocket = (server) => {
                 expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
             }
 
+            const isDirect = channel.type === "direct";
             const message = await Message.create({
                 channel: channelId,
                 sender: socket.user._id,
                 content,
-                minVisibilityRole: minVisibilityRole || "Observer",
+                minVisibilityRole: isDirect ? "Observer" : (minVisibilityRole || "Observer"),
                 expiresAt,
             });
 
@@ -111,13 +115,21 @@ const initSocket = (server) => {
                 const sockUserId = sock.user?._id?.toString();
                 if (!sockUserId) continue;
 
-                const sockParticipant = channel.participants.find(
-                    (p) => (p.user?._id || p.user).toString() === sockUserId
-                );
-                const userRole = sockParticipant?.channelRole || 'Observer';
-                const userLevel = ROLE_HIERARCHY[userRole] || 1;
+                if (isDirect) {
+                    sock.emit("receive_message", populatedMessage);
+                } else {
+                    const sockParticipant = channel.participants.find(
+                        (p) => (p.user?._id || p.user).toString() === sockUserId
+                    );
+                    const userRole = sockParticipant?.channelRole || 'Observer';
+                    const userLevel = ROLE_HIERARCHY[userRole] || 1;
 
-                if (userLevel >= minLevel) sock.emit("receive_message", populatedMessage);
+                    if (userLevel >= minLevel) sock.emit("receive_message", populatedMessage);
+                }
+            }
+
+            if (expiresAt) {
+                scheduleTTLDeletion(message._id, channelId, expiresAt, io);
             }
 
         } catch (e) {
@@ -137,9 +149,17 @@ const initSocket = (server) => {
                     return socket.emit("error", "Unauthorized to delete this message");
                 }
 
+                cancelTTLDeletion(messageId);
+
                 message.isDeleted = true;
                 message.content = '';   // wipe content from DB too
                 await message.save();
+
+                // Emit both formats for complete compatibility
+                io.to(channelId.toString()).emit("message:deleted", {
+                    _id: messageId.toString(),
+                    channel: channelId.toString()
+                });
 
                 // Update channel's lastMessage if this was the last one
                 const channel = await Channel.findById(channelId);
@@ -166,14 +186,20 @@ const initSocket = (server) => {
 
         // Typing Indicators
         socket.on("typing_start", ({ channelId }) => {
+            if (!channelId) return;
             socket.to(channelId.toString()).emit("user_typing", {
                 userId: socket.user._id,
+                username: socket.user.username,
+                fullName: socket.user.fullName,
+                channelId: channelId.toString()
             });
         });
 
         socket.on("typing_stop", ({ channelId }) => {
+            if (!channelId) return;
             socket.to(channelId.toString()).emit("user_stop_typing", {
                 userId: socket.user._id,
+                channelId: channelId.toString()
             });
         });
 
@@ -192,6 +218,59 @@ const initSocket = (server) => {
     return io;
 };
 
+const ttlTimerMap = new Map();
+
+const scheduleTTLDeletion = (messageId, channelId, expiresAt, customIO) => {
+    if (!messageId || !channelId || !expiresAt) return;
+    const msgIdStr = messageId.toString();
+
+    // Clear existing timer if any
+    if (ttlTimerMap.has(msgIdStr)) {
+        clearTimeout(ttlTimerMap.get(msgIdStr));
+        ttlTimerMap.delete(msgIdStr);
+    }
+
+    const delay = Math.max(0, new Date(expiresAt).getTime() - Date.now());
+
+    const timer = setTimeout(async () => {
+        try {
+            ttlTimerMap.delete(msgIdStr);
+            const msg = await Message.findById(msgIdStr);
+            if (!msg || msg.isDeleted) return;
+
+            msg.isDeleted = true;
+            msg.content = '';
+            await msg.save();
+
+            const socketInstance = customIO || io;
+            if (socketInstance) {
+                socketInstance.to(channelId.toString()).emit("message:deleted", {
+                    _id: msgIdStr,
+                    channel: channelId.toString()
+                });
+                socketInstance.to(channelId.toString()).emit("messageDeleted", {
+                    messageId: msgIdStr,
+                    channelId: channelId.toString(),
+                    isDeleted: true
+                });
+            }
+        } catch (err) {
+            console.error("TTL auto-deletion error:", err);
+        }
+    }, delay);
+
+    ttlTimerMap.set(msgIdStr, timer);
+};
+
+const cancelTTLDeletion = (messageId) => {
+    if (!messageId) return;
+    const msgIdStr = messageId.toString();
+    if (ttlTimerMap.has(msgIdStr)) {
+        clearTimeout(ttlTimerMap.get(msgIdStr));
+        ttlTimerMap.delete(msgIdStr);
+    }
+};
+
 const getIO = () => {
     if (!io) throw new Error("Socket.io not initialized yet");
     return io;
@@ -199,4 +278,4 @@ const getIO = () => {
 
 const getId = getIO;
 
-export { initSocket, getIO, getId };
+export { initSocket, getIO, getId, scheduleTTLDeletion, cancelTTLDeletion };

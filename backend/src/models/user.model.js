@@ -59,6 +59,11 @@ const userSchema = new Schema({
         type: String,
         enum : ["Admin", "Operations", "Agent", "Observer"],
         default : "Agent",
+    },
+
+    publicKey : {
+        type: String,
+        default: ""
     }
 }, {timestamps : true})
 

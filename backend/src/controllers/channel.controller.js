@@ -8,32 +8,52 @@ import { getId } from "../socket/socket.js";
 
 
 const createChannel = asyncHandler(async (req, res) => {
-    const {name, type, participants} = req.body;
+    const { name, type, participants, creatorEncryptedKey, isEncrypted, encryptionMetadata } = req.body;
 
     if (!Array.isArray(participants)) throw new apiError(400, "Participants must be an array");
     if (type === "direct" && participants.length !== 1) throw new apiError(400, "Direct channel must contain exactly 2 users including creater");
 
-    const resolvedUsers = await User.find({ username: { $in: participants } });
+    const usernames = [];
+    const keyMap = {};
+
+    participants.forEach(p => {
+        if (typeof p === "string") {
+            usernames.push(p);
+        } else if (p && typeof p === "object" && p.username) {
+            usernames.push(p.username);
+            if (p.encryptedKey) keyMap[p.username.toLowerCase()] = p.encryptedKey;
+        }
+    });
+
+    const resolvedUsers = await User.find({ username: { $in: usernames } });
     if (type === "direct" && resolvedUsers.length !== 1) throw new apiError(404, "Participant username not found");
 
     const formatedParticipants = resolvedUsers.map(u => ({
         user: u._id,
-        channelRole: "Agent"
+        channelRole: "Agent",
+        encryptedKey: keyMap[u.username.toLowerCase()] || ""
     }));
 
     formatedParticipants.push({
         user: req.user._id,
-        channelRole: "Admin"
+        channelRole: "Admin",
+        encryptedKey: creatorEncryptedKey || ""
     });
 
     const channel = await Channel.create({
         name,
         type,
         participants: formatedParticipants,
-        createdBy: req.user._id
+        createdBy: req.user._id,
+        isEncrypted: isEncrypted !== undefined ? isEncrypted : true,
+        encryptionMetadata: encryptionMetadata || {
+            algorithm: "AES-256-CBC",
+            keyExchange: "RSA-2048",
+            version: 1
+        }
     });
 
-    await channel.populate("participants.user", "username fullName avatar email role");
+    await channel.populate("participants.user", "username fullName avatar email role publicKey");
 
     const io = getId();
     channel.participants.forEach(p => {
@@ -50,7 +70,7 @@ const getUserChannels = asyncHandler(async (req, res) => {
     const channels = await Channel.find({
         "participants.user" : req.user._id
     }).populate("lastMessage")
-    .populate("participants.user", "username fullName avatar email role")
+    .populate("participants.user", "username fullName avatar email role publicKey")
     .sort({updatedAt: -1});
 
     return res.status(200).json(
@@ -62,7 +82,7 @@ const getUserChannels = asyncHandler(async (req, res) => {
 const getChannelDetails = asyncHandler(async (req, res) => {
     const { channelId } = req.params;
     const channel = await Channel.findById(channelId)
-        .populate("participants.user", "username fullName avatar email role");
+        .populate("participants.user", "username fullName avatar email role publicKey");
 
     if(!channel) throw new apiError(404, "Channel not Found");
 
@@ -79,7 +99,7 @@ const getChannelDetails = asyncHandler(async (req, res) => {
 
 const addParticipants = asyncHandler(async (req, res) => {
     const {channelId} = req.params;
-    const {username} = req.body;
+    const {username, encryptedKey} = req.body;
 
     const user = await User.findOne({ username });
     if(!user) throw new apiError(404, "User not found");
@@ -101,11 +121,12 @@ const addParticipants = asyncHandler(async (req, res) => {
 
     channel.participants.push({
         user: userId,
-        channelRole: "Agent"
+        channelRole: "Agent",
+        encryptedKey: encryptedKey || ""
     });
 
     await channel.save();
-    await channel.populate("participants.user", "username fullName avatar email role");
+    await channel.populate("participants.user", "username fullName avatar email role publicKey");
     await channel.populate("lastMessage");
 
     const io = getId();
@@ -137,7 +158,7 @@ const removeParticipant = asyncHandler(async(req, res) => {
     );
 
     await channel.save();
-    await channel.populate("participants.user", "username fullName avatar email role");
+    await channel.populate("participants.user", "username fullName avatar email role publicKey");
     await channel.populate("lastMessage");
 
     const io = getId();
@@ -174,7 +195,7 @@ const updateParticipantRole = asyncHandler(async(req, res) => {
     participant.channelRole = role;
 
     await channel.save();
-    await channel.populate("participants.user", "username fullName avatar email role");
+    await channel.populate("participants.user", "username fullName avatar email role publicKey");
     await channel.populate("lastMessage");
 
     const io = getId();
@@ -231,7 +252,7 @@ const updateChannel = asyncHandler(async (req, res) => {
     }
 
     await channel.save();
-    await channel.populate("participants.user", "username fullName avatar email role");
+    await channel.populate("participants.user", "username fullName avatar email role publicKey");
     await channel.populate("lastMessage");
 
     const io = getId();

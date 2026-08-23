@@ -133,7 +133,6 @@ function About() {
                 '🔐 Secure authentication (JWT)',
                 '⏱ Self-destruct messages (TTL)',
                 '🛡️ Role-based access (Admin / User)',
-                '✍️ Typing indicators & online presence',
               ].map((item, i) => (
                 <StaggerItem key={i}>
                   <motion.li
@@ -180,7 +179,7 @@ function About() {
                 'JWT Access Tokens',
                 'Role-based Permissions',
                 'TTL Message Expiry',
-                'AES + RSA (Planned)',
+                'AES + RSA',
               ],
             },
           ].map((stack, index) => (
@@ -245,7 +244,7 @@ function About() {
             },
             {
               title: '🏗️ Encryption-First Architecture',
-              desc: 'The entire system is designed with end-to-end encryption in mind from day one. AES-256 + RSA integration is on the roadmap.',
+              desc: 'The entire system is designed with end-to-end encryption in mind from day one. AES-256 + RSA integrated',
             },
             {
               title: '🎯 Minimal & Focused',
@@ -313,11 +312,11 @@ function About() {
             },
             {
               phase: 'Phase 3',
-              status: '🔜 Upcoming',
+              status: 'Done',
               title: 'E2E Encryption',
               desc: 'AES-256 message encryption with RSA/ECDH key exchange between clients.',
-              statusColor: 'text-yellow-600',
-              bgHover: 'rgba(234, 179, 8, 0.08)',
+              statusColor: 'text-green-600',
+              bgHover: 'rgba(34, 197, 94, 0.08)',
             },
           ].map((phase, index) => (
             <StaggerItem key={index}>

@@ -35,6 +35,16 @@ import {
   updateLastMessage,
 } from '../store/channelSlice'
 import { fetchMessages, addIncomingMessage, updateMessage, softDeleteMessage } from '../store/messageSlice'
+import {
+  generateAESKey,
+  encryptMessage,
+  decryptMessage,
+  encryptAESKeyWithPublicKey,
+  ensureUserKeyPair,
+  resolveChannelAESKey,
+  getChannelKey,
+  storeChannelKey,
+} from '../utils/encryption'
 
 // Constants
 const ROLE_HIERARCHY = { Observer: 1, Agent: 2, Operations: 3, Admin: 4 }
@@ -80,8 +90,10 @@ const getAvatarColor = (id) => {
 const groupByDate = (messages) => {
   const result = []
   let lastLabel = null
+  const now = Date.now()
   for (const msg of messages) {
     if (msg.isDeleted) continue
+    if (msg.expiresAt && new Date(msg.expiresAt).getTime() <= now) continue
     const label = formatDateLabel(msg.createdAt)
     if (label !== lastLabel) {
       result.push({ type: 'divider', label })
@@ -90,6 +102,48 @@ const groupByDate = (messages) => {
     result.push({ type: 'message', data: msg })
   }
   return result
+}
+
+const TTLCountdown = ({ expiresAt, isOwnMessage }) => {
+  const [timeLeft, setTimeLeft] = useState('')
+
+  useEffect(() => {
+    const update = () => {
+      if (!expiresAt) return
+      const diff = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000))
+      if (diff <= 0) {
+        setTimeLeft('0s')
+        return
+      }
+      const mins = Math.floor(diff / 60)
+      const secs = diff % 60
+      if (mins > 0) {
+        setTimeLeft(`${mins}m ${secs}s`)
+      } else {
+        setTimeLeft(`${secs}s`)
+      }
+    }
+
+    update()
+    const timer = setInterval(update, 1000)
+    return () => clearInterval(timer)
+  }, [expiresAt])
+
+  if (!timeLeft) return null
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+        isOwnMessage
+          ? 'bg-amber-400/30 text-amber-200 border border-amber-300/40'
+          : 'bg-amber-100 text-amber-700 border border-amber-200'
+      }`}
+      title={`Self-destructs at ${new Date(expiresAt).toLocaleTimeString()}`}
+    >
+      <IoTimerOutline className="text-[10px] animate-spin" style={{ animationDuration: '3s' }} />
+      <span>{timeLeft}</span>
+    </span>
+  )
 }
 
 const normalizeChannelId = (channel) =>
@@ -508,7 +562,24 @@ function MembersPanel({ activeChannel, myRole, user, onClose, onRoleChange, onRe
     if (!addUserId.trim()) { toast.error('Username is required'); return }
     setAddingUser(true)
     try {
-      await apiClient.post(`/api/channels/${activeChannel._id}/add`, { username: addUserId.trim() })
+      let encryptedKey = ''
+      const channelAESKey = getChannelKey(activeChannel._id) || resolveChannelAESKey(activeChannel, user?._id)
+      if (channelAESKey) {
+        try {
+          const userRes = await apiClient.get(`/api/users/public-key/${addUserId.trim()}`)
+          const recipientPublicKey = userRes.data?.data?.publicKey
+          if (recipientPublicKey) {
+            encryptedKey = encryptAESKeyWithPublicKey(channelAESKey, recipientPublicKey) || ''
+          }
+        } catch (keyErr) {
+          console.warn('Could not fetch public key for user:', keyErr)
+        }
+      }
+
+      await apiClient.post(`/api/channels/${activeChannel._id}/add`, {
+        username: addUserId.trim(),
+        encryptedKey
+      })
       toast.success('Participant added')
       setAddUserId('')
       onMemberAdded()
@@ -691,12 +762,31 @@ function Channels() {
   const isAdmin = myRole === 'Admin'
   const groupedMessages = useMemo(() => groupByDate(activeMessages), [activeMessages])
 
+  // Initialize RSA keypair & sync public key to server if needed
+  useEffect(() => {
+    if (!user?._id) return
+    const keys = ensureUserKeyPair(user._id)
+    if (keys?.publicKey && (!user.publicKey || user.publicKey !== keys.publicKey)) {
+      apiClient.patch('/api/users/public-key', { publicKey: keys.publicKey })
+        .catch((err) => console.warn('Could not sync public key to server:', err))
+    }
+  }, [user?._id, user?.publicKey])
+
   // Fetch channels on mount
   useEffect(() => { dispatch(fetchUserChannels()) }, [dispatch])
 
-  // Fetch messages + join socket room when channel changes
+  // Resolve channel AES keys for all loaded channels so previews/decryptions work smoothly
   useEffect(() => {
-    if (!activeChannel?._id) return
+    if (!user?._id || !Array.isArray(channels)) return
+    channels.forEach((ch) => {
+      resolveChannelAESKey(ch, user._id)
+    })
+  }, [channels, user?._id])
+
+  // Fetch messages + resolve channel key + join socket room when active channel changes
+  useEffect(() => {
+    if (!activeChannel?._id || !user?._id) return
+    resolveChannelAESKey(activeChannel, user._id)
     dispatch(fetchMessages(activeChannel._id))
     setShowMembersPanel(false)
     setEditingId(null)
@@ -706,12 +796,37 @@ function Channels() {
     return () => {
       socket.emit('leave_channel', activeChannel._id)
     }
-  }, [dispatch, activeChannel?._id])
+  }, [dispatch, activeChannel?._id, user?._id])
 
   // Auto scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeMessages.length])
+
+  // Live expiration ticker for messages with TTL
+  useEffect(() => {
+    const checkExpiredMessages = () => {
+      const now = Date.now()
+      activeMessages.forEach((msg) => {
+        if (!msg.isDeleted && msg.expiresAt) {
+          const expireTime = new Date(msg.expiresAt).getTime()
+          if (expireTime <= now) {
+            dispatch(softDeleteMessage(msg._id))
+            if (activeChannelRef.current?._id) {
+              dispatch(updateLastMessage({
+                channelId: activeChannelRef.current._id,
+                message: { _id: msg._id, isDeleted: true, content: '' }
+              }))
+            }
+          }
+        }
+      })
+    }
+
+    checkExpiredMessages()
+    const timer = setInterval(checkExpiredMessages, 1000)
+    return () => clearInterval(timer)
+  }, [activeMessages, dispatch])
 
   // Socket setup
   useEffect(() => {
@@ -736,17 +851,23 @@ function Channels() {
     socket.on('connect', handleSetup)
 
     socket.on('receive_message', (msg) => {
-      const ROLE_HIERARCHY = { Observer: 1, Agent: 2, Operations: 3, Admin: 4 }
-      const myLevel = ROLE_HIERARCHY[myRoleRef.current] || 1
-      const minLevel = ROLE_HIERARCHY[msg.minVisibilityRole] || 1
-      if (myLevel < minLevel) return
+      const channelId = normalizeChannelId(msg?.channel)
+      const isDirect = activeChannelRef.current?.type === 'direct' || msg?.minVisibilityRole === 'Observer'
+
+      if (!isDirect) {
+        const ROLE_HIERARCHY = { Observer: 1, Agent: 2, Operations: 3, Admin: 4 }
+        const myLevel = ROLE_HIERARCHY[myRoleRef.current] || 1
+        const minLevel = ROLE_HIERARCHY[msg.minVisibilityRole] || 1
+        if (myLevel < minLevel) return
+      }
 
       const senderId = (msg?.sender?._id || msg?.sender)?.toString()
       const currentUserId = userRef.current?._id?.toString()
       if (senderId && currentUserId && senderId === currentUserId) return
 
-      const channelId = normalizeChannelId(msg?.channel)
-      const normalizedMsg = { ...msg, channel: channelId }
+      const aesKey = getChannelKey(channelId) || resolveChannelAESKey(activeChannelRef.current, userRef.current?._id)
+      const decryptedContent = decryptMessage(msg?.content, aesKey)
+      const normalizedMsg = { ...msg, channel: channelId, content: decryptedContent }
       dispatch(addIncomingMessage(normalizedMsg))
       if (channelId) dispatch(updateLastMessage({ channelId, message: normalizedMsg }))
     })
@@ -754,32 +875,42 @@ function Channels() {
     socket.on('message:updated', (msg) => {
       if (!msg) return
       const channelId = normalizeChannelId(msg?.channel)
-      dispatch(updateMessage({ ...msg, channel: channelId }))
+      const aesKey = getChannelKey(channelId) || resolveChannelAESKey(activeChannelRef.current, userRef.current?._id)
+      const decryptedContent = decryptMessage(msg?.content, aesKey)
+      dispatch(updateMessage({ ...msg, channel: channelId, content: decryptedContent }))
     })
 
-    socket.on('message:deleted', (msg) => {
+    const handleDeleteEvent = (msg) => {
       if (!msg) return
-      const messageId = msg._id || msg
-      const channelId = msg.channel
+      const messageId = msg._id || msg.messageId || (typeof msg === 'string' ? msg : null)
+      const channelId = normalizeChannelId(msg.channel || msg.channelId)
 
-      dispatch(softDeleteMessage(messageId))
-
-      if (channelId) {
-        dispatch(updateLastMessage({
-          channelId,
-          message: { _id: messageId, isDeleted: true, content: '' }
-        }))
+      if (messageId) {
+        dispatch(softDeleteMessage(messageId))
+        if (channelId) {
+          dispatch(updateLastMessage({
+            channelId,
+            message: { _id: messageId, isDeleted: true, content: '' }
+          }))
+        }
       }
-    })
+    }
+
+    socket.on('message:deleted', handleDeleteEvent)
+    socket.on('messageDeleted', handleDeleteEvent)
 
     socket.on('channel:updated', (updated) => {
+      if (userRef.current?._id) resolveChannelAESKey(updated, userRef.current._id)
       dispatch(upsertChannel(updated))
       if (updated._id?.toString() === activeChannelRef.current?._id?.toString()) {
         dispatch(setActiveChannel(updated))
       }
     })
 
-    socket.on('channel:created', (created) => dispatch(upsertChannel(created)))
+    socket.on('channel:created', (created) => {
+      if (userRef.current?._id) resolveChannelAESKey(created, userRef.current._id)
+      dispatch(upsertChannel(created))
+    })
 
     socket.on('channel:removed', ({ channelId }) => {
       dispatch(removeChannel({ channelId }))
@@ -791,7 +922,8 @@ function Channels() {
       socket.off('connect', handleSetup)
       socket.off('receive_message')
       socket.off('message:updated')
-      socket.off('message:deleted')
+      socket.off('message:deleted', handleDeleteEvent)
+      socket.off('messageDeleted', handleDeleteEvent)
       socket.off('channel:updated')
       socket.off('channel:created')
       socket.off('channel:removed')
@@ -837,6 +969,9 @@ function Channels() {
   }, [dispatch])
 
   const handleSelectChannel = useCallback((channel) => {
+    if (channel && userRef.current?._id) {
+      resolveChannelAESKey(channel, userRef.current._id)
+    }
     dispatch(setActiveChannel(channel))
     if (window.innerWidth < 1024) setSidebarOpen(false)
   }, [dispatch])
@@ -846,15 +981,20 @@ function Channels() {
     if (!trimmed || !activeChannel?._id || sending) return
     setSending(true)
     try {
+      const aesKey = resolveChannelAESKey(activeChannel, user?._id)
+      const encryptedContent = encryptMessage(trimmed, aesKey)
+
+      const effectiveRole = activeChannel.type === 'direct' ? 'Observer' : minVisibilityRole
       const res = await apiClient.post('/api/messages/send', {
         channelId: activeChannel._id,
-        content: trimmed,
-        minVisibilityRole,
+        content: encryptedContent,
+        minVisibilityRole: effectiveRole,
       })
       const newMsg = res?.data?.data
       if (newMsg) {
         dispatch(addIncomingMessage({
           ...newMsg,
+          content: trimmed, // Sender sees clear plaintext immediately
           channel: activeChannel._id,
           sender: {
             _id: user?._id,
@@ -863,7 +1003,10 @@ function Channels() {
             avatar: user?.avatar,
           },
         }))
-        dispatch(updateLastMessage({ channelId: activeChannel._id, message: newMsg }))
+        dispatch(updateLastMessage({
+          channelId: activeChannel._id,
+          message: { ...newMsg, content: trimmed }
+        }))
       }
       setMessageText('')
       textareaRef.current?.focus()
@@ -879,7 +1022,10 @@ function Channels() {
     if (!trimmed) return
     setEditSaving(true)
     try {
-      const res = await apiClient.patch(`/api/messages/edit/${messageId}`, { content: trimmed })
+      const aesKey = resolveChannelAESKey(activeChannel, user?._id)
+      const encryptedContent = encryptMessage(trimmed, aesKey)
+
+      const res = await apiClient.patch(`/api/messages/edit/${messageId}`, { content: encryptedContent })
       const originalMsg = activeMessages.find((m) => m._id === messageId)
       const resolvedSender =
         (typeof res.data.data?.sender === 'object' && res.data.data.sender?._id
@@ -897,6 +1043,7 @@ function Channels() {
 
       dispatch(updateMessage({
         ...res.data.data,
+        content: trimmed, // Plaintext for local display
         channel: normalizeChannelId(res.data.data?.channel) || activeChannel._id,
         sender: resolvedSender,
       }))
@@ -954,11 +1101,45 @@ function Channels() {
     }
     setCreating(true)
     try {
-      await apiClient.post('/api/channels/create', {
+      const channelAESKey = generateAESKey()
+      const userKeys = ensureUserKeyPair(user?._id)
+      const creatorEncryptedKey = userKeys?.publicKey
+        ? encryptAESKeyWithPublicKey(channelAESKey, userKeys.publicKey) || ''
+        : ''
+
+      const participantsPayload = []
+      if (newParticipantId.trim()) {
+        const username = newParticipantId.trim()
+        let participantEncryptedKey = ''
+        try {
+          const userRes = await apiClient.get(`/api/users/public-key/${username}`)
+          const recipientPublicKey = userRes.data?.data?.publicKey
+          if (recipientPublicKey) {
+            participantEncryptedKey = encryptAESKeyWithPublicKey(channelAESKey, recipientPublicKey) || ''
+          }
+        } catch (keyErr) {
+          console.warn('Could not fetch public key for participant:', keyErr)
+        }
+
+        participantsPayload.push({
+          username,
+          encryptedKey: participantEncryptedKey
+        })
+      }
+
+      const res = await apiClient.post('/api/channels/create', {
         name: newName.trim(),
         type: newType,
-        participants: newParticipantId.trim() ? [newParticipantId.trim()] : [],
+        participants: participantsPayload,
+        creatorEncryptedKey,
+        isEncrypted: true
       })
+
+      const createdChannel = res?.data?.data
+      if (createdChannel?._id) {
+        storeChannelKey(createdChannel._id, channelAESKey)
+      }
+
       toast.success('Channel created')
       setNewName(''); setNewParticipantId(''); setNewType('group'); setShowCreateModal(false)
       dispatch(fetchUserChannels())
@@ -1034,6 +1215,18 @@ function Channels() {
                 ) : (
                   filteredChannels.map((channel) => {
                     const isActive = activeChannel?._id === channel._id
+                    const isDirect = channel?.type === 'direct'
+                    const otherParticipant = isDirect
+                      ? channel?.participants?.find(p => (p.user?._id || p.user)?.toString() !== user?._id?.toString())
+                      : null
+                    const otherUser = otherParticipant?.user
+                    const channelDisplayName = isDirect
+                      ? (otherUser?.fullName || otherUser?.username || channel?.name || 'Direct Chat')
+                      : (channel?.name || 'Group Chat')
+                    const channelDisplayAvatar = isDirect
+                      ? (otherUser?.avatar || channel?.avatar)
+                      : channel?.avatar
+
                     return (
                       <button
                         key={channel._id}
@@ -1041,23 +1234,23 @@ function Channels() {
                         className={`mb-1 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-all ${isActive ? 'border border-purple-200 bg-purple-100' : 'border border-transparent hover:bg-gray-50'}`}
                       >
                         <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-bold text-sm text-white overflow-hidden ${isActive ? 'bg-purple-700' : 'bg-purple-500'}`}>
-                          {channel?.avatar
-                            ? <img src={channel.avatar} alt={channel.name} className="h-full w-full object-cover" />
-                            : getInitial(channel?.name || 'D')
+                          {channelDisplayAvatar
+                            ? <img src={channelDisplayAvatar} alt={channelDisplayName} className="h-full w-full object-cover" />
+                            : getInitial(channelDisplayName)
                           }
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className={`truncate text-sm font-semibold ${isActive ? 'text-purple-800' : 'text-gray-800'}`}>
-                              {channel?.name || 'Direct Chat'}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`truncate text-sm font-semibold ${isActive ? 'text-purple-800' : 'text-gray-800'}`}>
+                                {channelDisplayName}
+                              </span>
+                              {channel?.isEncrypted !== false && (
+                                <IoLockClosedOutline className="text-gray-400 text-xs shrink-0" title="End-to-End Encrypted" />
+                              )}
+                            </div>
                             <span className="shrink-0 text-[10px] text-gray-400">{formatTime(channel?.updatedAt)}</span>
                           </div>
-                          {/* <p className="mt-0.5 truncate text-xs text-gray-500">
-                            {channel.lastMessage?.isDeleted
-                              ? 'Message deleted'
-                              : (channel.lastMessage?.content || '')}
-                          </p> */}
                         </div>
                       </button>
                     )
@@ -1085,27 +1278,52 @@ function Channels() {
               <button onClick={() => setSidebarOpen(true)} className="shrink-0 rounded-lg p-2 text-gray-500 hover:bg-purple-50 hover:text-purple-700">
                 <IoMenuOutline className="text-xl" />
               </button>
-              {activeChannel ? (
-                <>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-600 font-bold text-white overflow-hidden">
-                    {activeChannel?.avatar
-                      ? <img src={activeChannel.avatar} alt={activeChannel.name} className="h-full w-full object-cover" />
-                      : getInitial(activeChannel?.name || 'D')
-                    }
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-base font-bold text-gray-800">{activeChannel?.name || 'Direct Chat'}</h2>
-                    <p className="text-xs text-gray-500 capitalize">
-                      {activeChannel?.type} · {activeChannel?.participants?.length || 0} Members · You Are{' '}
-                      <span className="font-semibold text-purple-600">{myRole}</span>
-                    </p>
-                  </div>
-                </>
-              ) : (
+              {activeChannel ? (() => {
+                const isDirect = activeChannel.type === 'direct'
+                const otherParticipant = isDirect
+                  ? activeChannel.participants?.find(p => (p.user?._id || p.user)?.toString() !== user?._id?.toString())
+                  : null
+                const otherUser = otherParticipant?.user
+                const headerTitle = isDirect
+                  ? (otherUser?.fullName || otherUser?.username || activeChannel.name || 'Direct Chat')
+                  : (activeChannel.name || 'Group Chat')
+                const headerAvatar = isDirect
+                  ? (otherUser?.avatar || activeChannel.avatar)
+                  : activeChannel.avatar
+
+                return (
+                  <>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-600 font-bold text-white overflow-hidden">
+                      {headerAvatar
+                        ? <img src={headerAvatar} alt={headerTitle} className="h-full w-full object-cover" />
+                        : getInitial(headerTitle)
+                      }
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="truncate text-base font-bold text-gray-800">{headerTitle}</h2>
+                        {activeChannel?.isEncrypted !== false && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200" title="End-to-End Encrypted (AES-256 + RSA-2048)">
+                            <IoShieldCheckmarkOutline className="text-xs" />
+                            <span>E2EE</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 capitalize">
+                        {isDirect ? (
+                          <span>Direct Message{otherUser?.username ? ` with @${otherUser.username}` : ''}</span>
+                        ) : (
+                          <span>{activeChannel?.type} · {activeChannel?.participants?.length || 0} Members · You Are <span className="font-semibold text-purple-600">{myRole}</span></span>
+                        )}
+                      </p>
+                    </div>
+                  </>
+                )
+              })() : (
                 <h2 className="text-base font-bold text-gray-600">Select a channel</h2>
               )}
             </div>
-            {activeChannel && (
+            {activeChannel && activeChannel.type !== 'direct' && (
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   onClick={() => setShowMembersPanel(!showMembersPanel)}
@@ -1239,15 +1457,13 @@ function Channels() {
                                   <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] ${isOwnMessage ? 'text-purple-200 justify-end' : 'text-gray-400'}`}>
                                     <span>{formatTime(message?.createdAt)}</span>
                                     {message?.isEdited && <span>· edited</span>}
-                                    {message?.minVisibilityRole && message.minVisibilityRole !== 'Observer' && (
+                                    {activeChannel?.type !== 'direct' && message?.minVisibilityRole && message.minVisibilityRole !== 'Observer' && (
                                       <span className="flex items-center gap-0.5 rounded-full bg-white/20 px-1.5 py-0.5">
                                         <IoLockClosedOutline className="text-[9px]" />{message.minVisibilityRole}+
                                       </span>
                                     )}
                                     {message?.expiresAt && (
-                                      <span className="flex items-center gap-0.5" title={`Expires: ${new Date(message.expiresAt).toLocaleString()}`}>
-                                        <IoTimerOutline className="text-[10px]" />TTL
-                                      </span>
+                                      <TTLCountdown expiresAt={message.expiresAt} isOwnMessage={isOwnMessage} />
                                     )}
                                   </div>
                                 </div>
@@ -1299,37 +1515,39 @@ function Channels() {
               {activeChannel && (
                 <div className="shrink-0 border-t border-purple-100 bg-white px-4 py-3">
                   <div className="flex items-end gap-3">
-                    <div className="relative shrink-0">
-                      <button
-                        onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-3 text-xs font-semibold text-purple-700 hover:bg-purple-50"
-                      >
-                        <IoShieldOutline className="text-sm" />
-                        {minVisibilityRole}
-                        <IoChevronDownOutline className="text-xs" />
-                      </button>
-                      <AnimatePresence>
-                        {showRoleDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 4 }}
-                            className="absolute bottom-full left-0 z-10 mb-1 overflow-hidden rounded-xl border border-purple-100 bg-white shadow-xl"
-                          >
-                            {ROLES.map((role) => (
-                              <button
-                                key={role}
-                                onClick={() => { setMinVisibilityRole(role); setShowRoleDropdown(false) }}
-                                className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-purple-50 ${minVisibilityRole === role ? 'bg-purple-100 font-bold text-purple-700' : 'text-gray-700'}`}
-                              >
-                                {role}
-                              </button>
-                            ))}
-                            <div className="border-t border-purple-50 px-4 py-2 text-[10px] text-gray-400">Who can see this message</div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                    {activeChannel.type !== 'direct' && (
+                      <div className="relative shrink-0">
+                        <button
+                          onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                          className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-3 text-xs font-semibold text-purple-700 hover:bg-purple-50"
+                        >
+                          <IoShieldOutline className="text-sm" />
+                          {minVisibilityRole}
+                          <IoChevronDownOutline className="text-xs" />
+                        </button>
+                        <AnimatePresence>
+                          {showRoleDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 4 }}
+                              className="absolute bottom-full left-0 z-10 mb-1 overflow-hidden rounded-xl border border-purple-100 bg-white shadow-xl"
+                            >
+                              {ROLES.map((role) => (
+                                <button
+                                  key={role}
+                                  onClick={() => { setMinVisibilityRole(role); setShowRoleDropdown(false) }}
+                                  className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-purple-50 ${minVisibilityRole === role ? 'bg-purple-100 font-bold text-purple-700' : 'text-gray-700'}`}
+                                >
+                                  {role}
+                                </button>
+                              ))}
+                              <div className="border-t border-purple-50 px-4 py-2 text-[10px] text-gray-400">Who can see this message</div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
                     <textarea
                       ref={textareaRef}
                       rows={1}
@@ -1352,9 +1570,11 @@ function Channels() {
                       }
                     </button>
                   </div>
-                  <p className="mt-1.5 pl-1 text-[11px] text-gray-400">
-                    Visible to <span className="font-semibold text-purple-500">{minVisibilityRole}</span> and above · role level {ROLE_HIERARCHY[minVisibilityRole]}+
-                  </p>
+                  {activeChannel.type !== 'direct' && (
+                    <p className="mt-1.5 pl-1 text-[11px] text-gray-400">
+                      Visible to <span className="font-semibold text-purple-500">{minVisibilityRole}</span> and above · role level {ROLE_HIERARCHY[minVisibilityRole]}+
+                    </p>
+                  )}
                 </div>
               )}
             </div>
